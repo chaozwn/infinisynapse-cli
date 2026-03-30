@@ -51,9 +51,9 @@ Key Features:
   - Unified JSON output for pipeline composability
 
 Quick Start:
-  agent_infini session current                  # View the current active session
-  agent_infini session use "data-analysis"      # Create & activate a session named "data-analysis"
-  agent_infini chat "Hello, analyze my data"    # Chat using the current session
+  agent_infini session new --name "analysis" --query "Analyze my data"
+  agent_infini session -s "analysis" -q "Show trends"
+  agent_infini session ls
 
 Use 'agent_infini --skill' or 'agent_infini skill' for detailed command specifications.
 

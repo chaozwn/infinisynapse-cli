@@ -16,6 +16,8 @@ type SessionData struct {
 	TaskID        string    `json:"taskId"`
 	ConnID        string    `json:"connId,omitempty"`
 	WorkspacePath string    `json:"workspacePath"`
+	Status        string    `json:"status"`
+	LastAskType   string    `json:"lastAskType,omitempty"`
 	CreatedAt     time.Time `json:"createdAt"`
 	UpdatedAt     time.Time `json:"updatedAt"`
 }
@@ -61,7 +63,7 @@ func Load(name string) (*SessionData, error) {
 	return &sess, nil
 }
 
-func Save(name, userID, taskID, connID, workspacePath string) error {
+func Save(name, userID, taskID, connID, workspacePath, status, lastAskType string) error {
 	fp, err := sessionFilePath(name)
 	if err != nil {
 		return err
@@ -74,6 +76,8 @@ func Save(name, userID, taskID, connID, workspacePath string) error {
 		TaskID:        taskID,
 		ConnID:        connID,
 		WorkspacePath: workspacePath,
+		Status:        status,
+		LastAskType:   lastAskType,
 		UpdatedAt:     now,
 	}
 
@@ -135,10 +139,6 @@ func Delete(name string) error {
 		}
 		return fmt.Errorf("failed to delete session '%s': %w", name, err)
 	}
-
-	if cur, _ := GetCurrent(); cur == name {
-		_ = ClearCurrent()
-	}
 	return nil
 }
 
@@ -151,44 +151,3 @@ func Exists(name string) bool {
 	return err == nil
 }
 
-func currentFilePath() (string, error) {
-	dir, err := sessionsDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, ".current"), nil
-}
-
-func SetCurrent(name string) error {
-	fp, err := currentFilePath()
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(fp, []byte(name), 0644)
-}
-
-func GetCurrent() (string, error) {
-	fp, err := currentFilePath()
-	if err != nil {
-		return "", err
-	}
-	data, err := os.ReadFile(fp)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return "", nil
-		}
-		return "", err
-	}
-	return strings.TrimSpace(string(data)), nil
-}
-
-func ClearCurrent() error {
-	fp, err := currentFilePath()
-	if err != nil {
-		return err
-	}
-	if err := os.Remove(fp); err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	return nil
-}

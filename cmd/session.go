@@ -4,22 +4,85 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
-	"time"
 
+	"github.com/chaozwn/infinisynapse-cli/internal/client"
 	"github.com/chaozwn/infinisynapse-cli/internal/config"
 	"github.com/chaozwn/infinisynapse-cli/internal/output"
 	"github.com/chaozwn/infinisynapse-cli/internal/session"
+	"github.com/chaozwn/infinisynapse-cli/internal/task"
+	"github.com/chaozwn/infinisynapse-cli/internal/types"
 	"github.com/spf13/cobra"
 )
 
 var sessionCmd = &cobra.Command{
 	Use:   "session",
-	Short: "Manage chat sessions",
-	Long: `Manage session aliases used for multi-turn chat conversations.
+	Short: "Manage sessions and chat",
+	Long: `Manage sessions for multi-turn chat conversations.
 
-Sessions automatically save and restore the task ID between 'agent_infini chat' calls,
-enabling seamless multi-turn workflows without manually tracking task IDs.`,
+Create a new session and start a task:
+  agent_infini session new --name "analysis" --query "Analyze sales data"
+
+Continue a conversation in an existing session:
+  agent_infini session -s "analysis" --query "Focus on revenue"
+
+Manage sessions:
+  agent_infini session ls
+  agent_infini session show "analysis"
+  agent_infini session rm "analysis"`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		query, _ := cmd.Flags().GetString("query")
+		if query == "" {
+			return cmd.Help()
+		}
+		if sessionName == "" {
+			return fmt.Errorf("--session / -s is required when using --query")
+		}
+
+		sess, err := session.Load(sessionName)
+		if err != nil {
+			return fmt.Errorf("session '%s' not found: %w", sessionName, err)
+		}
+		if sess.TaskID == "" {
+			return fmt.Errorf("session '%s' has no active task; use 'session new' to start one", sessionName)
+		}
+
+		result, err := task.RunAskResponse(sess.TaskID, query)
+		if err != nil {
+			return err
+		}
+		if result.TaskID != "" {
+			saveSession(sessionName, result.TaskID, result.ConnID, result.Status, result.LastAskType)
+		}
+		return nil
+	},
+}
+
+var sessionNewCmd = &cobra.Command{
+	Use:   "new",
+	Short: "Create a new session and start a task",
+	Long: `Create a new session and send a newTask to the server.
+
+If a session with the same name already exists, it will be reset with a new task.
+
+Examples:
+  agent_infini session new --name "data-analysis" --query "Analyze sales data"
+  agent_infini session new --name "inventory" --query "Check stock levels"`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		name, _ := cmd.Flags().GetString("name")
+		query, _ := cmd.Flags().GetString("query")
+		if name == "" || query == "" {
+			return fmt.Errorf("both --name and --query are required")
+		}
+
+		result, err := task.RunNewTask(query)
+		if err != nil {
+			return err
+		}
+		if result.TaskID != "" {
+			saveSession(name, result.TaskID, result.ConnID, result.Status, result.LastAskType)
+		}
+		return nil
+	},
 }
 
 var sessionListCmd = &cobra.Command{
@@ -38,18 +101,18 @@ var sessionListCmd = &cobra.Command{
 		}
 
 		printer := output.NewPrinter(getOutputFormat())
-		headers := []string{"Name", "Task ID", "Workspace Path", "Updated At"}
+		headers := []string{"Name", "Task ID", "Status", "Updated At"}
 		rows := make([][]string, 0, len(sessions))
 		for _, s := range sessions {
 			taskID := s.TaskID
 			if len(taskID) > 16 {
 				taskID = taskID[:16] + "..."
 			}
-			wp := s.WorkspacePath
-			if len(wp) > 40 {
-				wp = "..." + wp[len(wp)-37:]
+			status := s.Status
+			if status == "" {
+				status = "-"
 			}
-			rows = append(rows, []string{s.Name, taskID, wp, s.UpdatedAt.Format("2006-01-02 15:04:05")})
+			rows = append(rows, []string{s.Name, taskID, status, s.UpdatedAt.Format("2006-01-02 15:04:05")})
 		}
 		printer.PrintTable(headers, rows)
 		return nil
@@ -85,102 +148,112 @@ var sessionRemoveCmd = &cobra.Command{
 	},
 }
 
-var sessionUseCmd = &cobra.Command{
-	Use:   "use [name]",
-	Short: "Create (if needed) and set a session as current",
-	Long: `Set the named session as the current active session.
-If the session does not exist, it will be created.
-Subsequent 'chat' calls without --session will use this session automatically.`,
-	Args: cobra.ExactArgs(1),
+var sessionStateCmd = &cobra.Command{
+	Use:   "state",
+	Short: "Get AI state for a session",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		name := args[0]
+		c, err := client.NewWithOverrides("", "")
+		if err != nil {
+			return err
+		}
 
-		if !session.Exists(name) {
-			taskID := strconv.FormatInt(time.Now().UnixMilli(), 10)
-			userID := config.GetUserID()
-			wsPath := taskWorkspacePath(userID, taskID)
-			if err := session.Save(name, userID, taskID, "", wsPath); err != nil {
-				return fmt.Errorf("failed to create session '%s': %w", name, err)
+		taskID, _ := cmd.Flags().GetString("task-id")
+		if taskID == "" && sessionName != "" {
+			sess, loadErr := session.Load(sessionName)
+			if loadErr == nil {
+				taskID = sess.TaskID
 			}
-			output.PrintSuccess("Session '%s' created (taskId: %s)", name, taskID)
 		}
 
-		if err := session.SetCurrent(name); err != nil {
-			return fmt.Errorf("failed to set current session: %w", err)
+		params := map[string]string{}
+		if taskID != "" {
+			params["taskId"] = taskID
 		}
-		output.PrintSuccess("Current session set to '%s'", name)
+
+		data, err := c.Get("/api/ai/state", params)
+		if err != nil {
+			return err
+		}
+
+		printer := output.NewPrinter(getOutputFormat())
+		return printer.PrintJSON(data)
+	},
+}
+
+var sessionCancelCmd = &cobra.Command{
+	Use:   "cancel",
+	Short: "Cancel a running task in a session",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		c, err := client.NewWithOverrides("", "")
+		if err != nil {
+			return err
+		}
+
+		taskID, _ := cmd.Flags().GetString("task-id")
+		if taskID == "" && sessionName != "" {
+			sess, loadErr := session.Load(sessionName)
+			if loadErr == nil {
+				taskID = sess.TaskID
+			}
+		}
+		if taskID == "" {
+			return fmt.Errorf("--task-id or --session is required")
+		}
+
+		msg := types.WebviewMessage{
+			Type:   "cancelTask",
+			TaskID: taskID,
+		}
+
+		data, err := c.Post("/api/ai/message", msg)
+		if err != nil {
+			return err
+		}
+
+		output.PrintSuccess("Task %s cancelled", taskID)
+
+		if sessionName != "" {
+			saveSession(sessionName, taskID, "", "cancelled", "")
+		}
+
+		if data != nil {
+			printer := output.NewPrinter(getOutputFormat())
+			return printer.PrintJSON(data)
+		}
 		return nil
 	},
 }
 
-var sessionCurrentCmd = &cobra.Command{
-	Use:   "current",
-	Short: "Show the current active session",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		name, err := session.GetCurrent()
-		if err != nil {
-			return fmt.Errorf("failed to read current session: %w", err)
-		}
-		if name == "" {
-			output.PrintSuccess("No current session set. Use 'agent_infini session use <name>' to set one.")
-			return nil
-		}
-
-		sess, err := session.Load(name)
-		if err != nil {
-			return fmt.Errorf("current session '%s' is set but cannot be loaded: %w", name, err)
-		}
-
-		printer := output.NewPrinter(getOutputFormat())
-		return printer.PrintJSON(sess)
-	},
-}
-
 func init() {
+	sessionCmd.Flags().StringP("query", "q", "", "Send a message to continue the conversation (askResponse)")
+
+	sessionNewCmd.Flags().String("name", "", "Session name (required)")
+	sessionNewCmd.Flags().String("query", "", "Initial message/query (required)")
+	_ = sessionNewCmd.MarkFlagRequired("name")
+	_ = sessionNewCmd.MarkFlagRequired("query")
+
+	sessionStateCmd.Flags().String("task-id", "", "Get state for specific task")
+	sessionCancelCmd.Flags().String("task-id", "", "Task ID to cancel")
+
+	sessionCmd.AddCommand(sessionNewCmd)
 	sessionCmd.AddCommand(sessionListCmd)
 	sessionCmd.AddCommand(sessionShowCmd)
 	sessionCmd.AddCommand(sessionRemoveCmd)
-	sessionCmd.AddCommand(sessionUseCmd)
-	sessionCmd.AddCommand(sessionCurrentCmd)
+	sessionCmd.AddCommand(sessionStateCmd)
+	sessionCmd.AddCommand(sessionCancelCmd)
 
 	rootCmd.AddCommand(sessionCmd)
 }
 
-func resolveSessionName(sessionName string) string {
-	if sessionName != "" {
-		return sessionName
-	}
-	cur, _ := session.GetCurrent()
-	return cur
-}
-
-func resolveTaskIDFromSession(sessionName, explicitTaskID string) string {
-	if explicitTaskID != "" {
-		return explicitTaskID
-	}
-	name := resolveSessionName(sessionName)
-	if name == "" {
-		return ""
-	}
-	sess, err := session.Load(name)
-	if err != nil {
-		return ""
-	}
-	return sess.TaskID
-}
-
-func saveSession(sessionName, taskID, connID string) {
-	name := resolveSessionName(sessionName)
+func saveSession(name, taskID, connID, status, lastAskType string) {
 	if name == "" || taskID == "" {
 		return
 	}
 	userID := config.GetUserID()
 	wsPath := taskWorkspacePath(userID, taskID)
-	_ = session.Save(name, userID, taskID, connID, wsPath)
+	_ = session.Save(name, userID, taskID, connID, wsPath, status, lastAskType)
 }
 
-// taskWorkspacePath returns ~/.infiniSynapse/tasks/${userId}/${taskId}.
-// Falls back to the current working directory if userId is not configured.
 func taskWorkspacePath(userID, taskID string) string {
 	if userID == "" {
 		cwd, _ := os.Getwd()

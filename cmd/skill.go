@@ -26,46 +26,27 @@ First-time Setup:
   EOF
 
 Session Workflow (multi-turn chat):
-  1. Start a new conversation with a session alias:
-     agent_infini chat "Analyze my data" --session main
-  2. Continue the conversation (auto-resumes context):
-     agent_infini chat "Show me the trends" --session main
+  1. Create a session and start a new task:
+     agent_infini session new --name "analysis" --query "Analyze my data"
+  2. Continue the conversation (respond to server ask):
+     agent_infini session -s "analysis" --query "Show me the trends"
   3. Manage sessions:
      agent_infini session ls              # List all sessions
-     agent_infini session show main       # View session details
-     agent_infini session rm main         # Delete a session
-
-Without --session, each 'agent_infini chat' starts a fresh conversation.
+     agent_infini session show analysis   # View session details
+     agent_infini session rm analysis     # Delete a session
 
 ================================================================================
 Available Commands
 ================================================================================
 
-  version                        Print version, commit, build date, Go runtime
-  chat <message>                 Chat with AI (streaming), supports --session
-  chat state                     Get AI state
-  chat config get                Get API configuration
-  chat config set                Update API configuration
-  chat models                    List available AI models
-  chat cancel                    Cancel a running task
-  task list                      List tasks with pagination
-  task show <id>                 Show task details
-  task info <id>                 Get task metadata
-  task delete <ids...>           Delete tasks
-  task cancel                    Cancel a running task
-  task category list             List task categories
-  task category add <name>       Add a task category
-  task category delete <ids...>  Delete task categories
-  setting get <key>              Get a setting value
-  setting set <key> <value>      Set a setting value
-  setting language get           Get preferred language
-  setting language set <lang>    Set preferred language
-  setting engine-config get      Get engine configuration
-  setting engine-config set      Update engine configuration
-  setting model-info <model-id>  Get model information
-  session ls                     List all sessions
-  session show <name>            Show session details
-  session rm <name>              Delete a session
+  version                                          Print version, commit, build date, Go runtime
+  session new --name <name> --query <message>      Create session and start a new task (newTask)
+  session -s <name> --query <message>              Continue conversation in session (askResponse)
+  session ls                                       List all sessions with status
+  session show <name>                              Show session details
+  session rm <name>                                Delete a session
+  session state -s <name>                          Get AI state for a session
+  session cancel -s <name>                         Cancel a running task in a session
 
 ================================================================================
 Global Flags
@@ -81,21 +62,20 @@ Global Flags
 Common Scenarios
 ================================================================================
 
-1. Quick one-shot question:
-   agent_infini chat "What tables are in my database?"
+1. Start a new analysis session:
+   agent_infini session new --name "analysis" --query "What tables are in my database?"
 
-2. Multi-turn analysis with session:
-   agent_infini chat "Analyze the users table schema" --session analysis
-   agent_infini chat "Now show me the top 10 users by activity" --session analysis
-   agent_infini chat "Generate a summary report" --session analysis
+2. Multi-turn analysis:
+   agent_infini session new --name "analysis" --query "Analyze the users table schema"
+   agent_infini session -s "analysis" -q "Now show me the top 10 users by activity"
+   agent_infini session -s "analysis" -q "Generate a summary report"
 
-3. Task management:
-   agent_infini task list --size 20
-   agent_infini task show <task-id>
-   agent_infini task delete <task-id>
+3. Check session state:
+   agent_infini session ls
+   agent_infini session show "analysis"
 
-4. Pipeline with JSON output:
-   agent_infini task list --json | jq '.data.items[].id'
+4. Cancel a running task:
+   agent_infini session cancel -s "analysis"
 
 ================================================================================
 Output Format
