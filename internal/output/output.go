@@ -18,8 +18,8 @@ const (
 
 type Result struct {
 	Success bool        `json:"success"`
-	Data    interface{} `json:"data,omitempty"`
-	Error   string      `json:"error,omitempty"`
+	Data    interface{} `json:"data"`
+	Message string      `json:"message"`
 }
 
 type Printer struct {
@@ -89,9 +89,9 @@ func (p *Printer) Print(data interface{}, headers []string, toRows func(interfac
 func PrintResult(data interface{}, err error) {
 	var result Result
 	if err != nil {
-		result = Result{Success: false, Error: err.Error()}
+		result = Result{Success: false, Data: nil, Message: err.Error()}
 	} else {
-		result = Result{Success: true, Data: data}
+		result = Result{Success: true, Data: data, Message: ""}
 	}
 	out, _ := json.MarshalIndent(result, "", "  ")
 	fmt.Fprintln(os.Stdout, string(out))

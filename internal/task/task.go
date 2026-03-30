@@ -22,17 +22,17 @@ type StreamResult struct {
 	LastAskType string
 }
 
-func RunNewTask(query string) (*StreamResult, error) {
+func RunNewTask(query string, jsonMode bool) (*StreamResult, error) {
 	connID := uuid.New().String()
 	msg := types.WebviewMessage{
 		Type:   "newTask",
 		Text:   query,
 		ConnID: connID,
 	}
-	return runStreamingChat(connID, msg)
+	return runStreamingChat(connID, msg, jsonMode)
 }
 
-func RunAskResponse(taskID, query string) (*StreamResult, error) {
+func RunAskResponse(taskID, query string, jsonMode bool) (*StreamResult, error) {
 	connID := uuid.New().String()
 	msg := types.WebviewMessage{
 		Type:        "askResponse",
@@ -41,10 +41,21 @@ func RunAskResponse(taskID, query string) (*StreamResult, error) {
 		TaskID:      taskID,
 		AskResponse: "messageResponse",
 	}
-	return runStreamingChat(connID, msg)
+	return runStreamingChat(connID, msg, jsonMode)
 }
 
-func runStreamingChat(connID string, msg types.WebviewMessage) (*StreamResult, error) {
+type StreamEvent struct {
+	TaskID    string `json:"taskId"`
+	Ts        int64  `json:"ts"`
+	Type      string `json:"type"`
+	Say       string `json:"say,omitempty"`
+	Ask       string `json:"ask,omitempty"`
+	Text      string `json:"text,omitempty"`
+	Reasoning string `json:"reasoning,omitempty"`
+	Partial   bool   `json:"partial"`
+}
+
+func runStreamingChat(connID string, msg types.WebviewMessage, jsonMode bool) (*StreamResult, error) {
 	c, err := client.NewWithOverrides("", "")
 	if err != nil {
 		return nil, err
@@ -119,6 +130,9 @@ func runStreamingChat(connID string, msg types.WebviewMessage) (*StreamResult, e
 				if m.Type == "ask" && !m.Partial {
 					sessionStatus = "asking"
 					lastAskType = m.Ask
+					if jsonMode {
+						emitJSON(StreamEvent{TaskID: capturedTaskID, Ts: m.Ts, Type: m.Type, Ask: m.Ask, Text: m.Text, Partial: m.Partial})
+					}
 					return false
 				}
 
@@ -134,11 +148,15 @@ func runStreamingChat(connID string, msg types.WebviewMessage) (*StreamResult, e
 					text = m.Reasoning
 				}
 
-				lastLen := textLenByTs[m.Ts]
-				if text != "" && len(text) > lastLen {
-					delta := text[lastLen:]
-					fmt.Print(delta)
-					textLenByTs[m.Ts] = len(text)
+				if jsonMode {
+					emitJSON(StreamEvent{TaskID: capturedTaskID, Ts: m.Ts, Type: m.Type, Say: m.Say, Text: m.Text, Reasoning: m.Reasoning, Partial: m.Partial})
+				} else {
+					lastLen := textLenByTs[m.Ts]
+					if text != "" && len(text) > lastLen {
+						delta := text[lastLen:]
+						fmt.Print(delta)
+						textLenByTs[m.Ts] = len(text)
+					}
 				}
 
 			case "message.add":
@@ -153,16 +171,23 @@ func runStreamingChat(connID string, msg types.WebviewMessage) (*StreamResult, e
 				m := payload.Message
 
 				if m.Type == "say" && printableSayTypes[m.Say] {
-					text := m.Text
-					lastLen := textLenByTs[m.Ts]
-					if text != "" && len(text) > lastLen {
-						fmt.Print(text[lastLen:])
+					if jsonMode {
+						emitJSON(StreamEvent{TaskID: capturedTaskID, Ts: m.Ts, Type: m.Type, Say: m.Say, Text: m.Text, Reasoning: m.Reasoning, Partial: m.Partial})
+					} else {
+						text := m.Text
+						lastLen := textLenByTs[m.Ts]
+						if text != "" && len(text) > lastLen {
+							fmt.Print(text[lastLen:])
+						}
 					}
 				}
 
 				if m.Type == "ask" && !m.Partial {
 					sessionStatus = "asking"
 					lastAskType = m.Ask
+					if jsonMode {
+						emitJSON(StreamEvent{TaskID: capturedTaskID, Ts: m.Ts, Type: m.Type, Ask: m.Ask, Text: m.Text, Partial: m.Partial})
+					}
 					return false
 				}
 				if m.Say == "completion_result" {
@@ -184,7 +209,11 @@ func runStreamingChat(connID string, msg types.WebviewMessage) (*StreamResult, e
 				}
 				if err := json.Unmarshal([]byte(event.Data), &notif); err == nil {
 					if notif.Type == "error" {
-						fmt.Fprintf(os.Stderr, "\n[%s] %s: %s\n", notif.Type, notif.Title, notif.Message)
+						if jsonMode {
+							emitJSON(map[string]string{"type": "error", "title": notif.Title, "message": notif.Message})
+						} else {
+							fmt.Fprintf(os.Stderr, "\n[%s] %s: %s\n", notif.Type, notif.Title, notif.Message)
+						}
 					}
 				}
 				return true
@@ -232,7 +261,9 @@ func runStreamingChat(connID string, msg types.WebviewMessage) (*StreamResult, e
 	case <-ctx.Done():
 	}
 
-	fmt.Println()
+	if !jsonMode {
+		fmt.Println()
+	}
 
 	if capturedTaskID == "" && msg.TaskID != "" {
 		capturedTaskID = msg.TaskID
@@ -244,4 +275,12 @@ func runStreamingChat(connID string, msg types.WebviewMessage) (*StreamResult, e
 		Status:      sessionStatus,
 		LastAskType: lastAskType,
 	}, nil
+}
+
+func emitJSON(v interface{}) {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return
+	}
+	fmt.Println(string(data))
 }

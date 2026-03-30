@@ -4,11 +4,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/chaozwn/infinisynapse-cli/internal/client"
 	"github.com/chaozwn/infinisynapse-cli/internal/output"
 	"github.com/chaozwn/infinisynapse-cli/internal/task"
 	"github.com/chaozwn/infinisynapse-cli/internal/types"
+
 	"github.com/spf13/cobra"
 )
 
@@ -37,7 +39,7 @@ Manage tasks:
 			return fmt.Errorf("--task-id / -t is required when using --query")
 		}
 
-		_, err := task.RunAskResponse(globalTaskID, query)
+		_, err := task.RunAskResponse(globalTaskID, query, jsonOutput)
 		return err
 	},
 }
@@ -56,7 +58,7 @@ Examples:
 			return fmt.Errorf("--query is required")
 		}
 
-		_, err := task.RunNewTask(query)
+		_, err := task.RunNewTask(query, jsonOutput)
 		return err
 	},
 }
@@ -68,7 +70,8 @@ var taskListCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		c, err := client.New()
 		if err != nil {
-			return err
+			output.PrintResult(nil, err)
+			return nil
 		}
 
 		page, _ := cmd.Flags().GetInt("page")
@@ -87,46 +90,17 @@ var taskListCmd = &cobra.Command{
 
 		data, err := c.Get("/api/ai_task/list", params)
 		if err != nil {
-			return err
+			output.PrintResult(nil, err)
+			return nil
 		}
 
 		var result types.TaskListResponse
 		if err := json.Unmarshal(data, &result); err != nil {
-			return fmt.Errorf("failed to parse task list: %w", err)
-		}
-
-		if len(result.Items) == 0 {
-			output.PrintSuccess("No tasks found.")
+			output.PrintResult(nil, fmt.Errorf("failed to parse task list: %w", err))
 			return nil
 		}
 
-		printer := output.NewPrinter(getOutputFormat())
-		headers := []string{"ID", "User ID", "Task Name", "Status", "Updated At"}
-		rows := make([][]string, 0, len(result.Items))
-		for _, item := range result.Items {
-			id := item.ID
-			if len(id) > 16 {
-				id = id[:16] + "..."
-			}
-			userID := item.UserID
-			if len(userID) > 16 {
-				userID = userID[:16] + "..."
-			}
-			name := item.TaskName
-			if len(name) > 40 {
-				name = name[:40] + "..."
-			}
-			status := item.Status
-			if status == "" {
-				status = "-"
-			}
-			rows = append(rows, []string{id, userID, name, status, item.UpdatedAt})
-		}
-		printer.PrintTable(headers, rows)
-
-		fmt.Fprintf(cmd.OutOrStdout(), "\nPage %d/%d, %d total tasks\n",
-			result.Meta.CurrentPage, result.Meta.TotalPages, result.Meta.TotalItems)
-
+		output.PrintResult(result, nil)
 		return nil
 	},
 }
@@ -138,37 +112,66 @@ var taskShowCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		c, err := client.New()
 		if err != nil {
-			return err
+			output.PrintResult(nil, err)
+			return nil
 		}
 
 		data, err := c.Get(fmt.Sprintf("/api/ai_task/getTaskInfo/%s", args[0]), nil)
 		if err != nil {
-			return err
+			output.PrintResult(nil, err)
+			return nil
 		}
 
-		printer := output.NewPrinter(getOutputFormat())
-		return printer.PrintJSON(data)
+		var parsed interface{}
+		if err := json.Unmarshal(data, &parsed); err != nil {
+			output.PrintResult(nil, fmt.Errorf("failed to parse task info: %w", err))
+			return nil
+		}
+
+		output.PrintResult(parsed, nil)
+		return nil
 	},
 }
 
 var taskRemoveCmd = &cobra.Command{
-	Use:     "rm [taskId...]",
+	Use:   "rm <taskId>[,taskId...]",
+	Short: "Delete one or more tasks (comma or space separated)",
+	Long: `Delete one or more tasks by ID.
+
+Multiple IDs can be separated by commas or spaces:
+  agent_infini task rm id1,id2,id3
+  agent_infini task rm id1 id2 id3`,
 	Aliases: []string{"delete", "remove"},
-	Short:   "Delete one or more tasks",
 	Args:    cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		var ids []string
+		for _, arg := range args {
+			for _, id := range strings.Split(arg, ",") {
+				id = strings.TrimSpace(id)
+				if id != "" {
+					ids = append(ids, id)
+				}
+			}
+		}
+		if len(ids) == 0 {
+			output.PrintResult(nil, fmt.Errorf("at least one task ID is required"))
+			return nil
+		}
+
 		c, err := client.New()
 		if err != nil {
-			return err
+			output.PrintResult(nil, err)
+			return nil
 		}
 
-		body := map[string][]string{"ids": args}
+		body := map[string][]string{"ids": ids}
 		_, err = c.Post("/api/ai_task/deleteTaskWithId", body)
 		if err != nil {
-			return err
+			output.PrintResult(nil, err)
+			return nil
 		}
 
-		output.PrintSuccess("Deleted %d task(s)", len(args))
+		output.PrintResult(map[string]int{"deleted": len(ids)}, nil)
 		return nil
 	},
 }
