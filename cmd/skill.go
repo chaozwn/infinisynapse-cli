@@ -49,14 +49,6 @@ Available Commands
   task category list             List task categories
   task category add <name>       Add a task category
   task category delete <ids...>  Delete task categories
-  db list                        List databases
-  db get <id>                    Get database details
-  db add                         Add a new database
-  db update                      Update a database
-  db delete <ids...>             Delete databases
-  db test                        Test database connection
-  db enable <ids...>             Enable databases
-  db disable <ids...>            Disable databases
   setting get <key>              Get a setting value
   setting set <key> <value>      Set a setting value
   setting language get           Get preferred language
@@ -94,14 +86,8 @@ Common Scenarios
    isc task show <task-id>
    isc task delete <task-id>
 
-4. Database management:
-   isc db list
-   isc db test --type mysql --config '{"host":"localhost","port":3306,"user":"root","password":"xxx","database":"mydb"}'
-   isc db add --name "production" --type mysql --config '...' --description "Production DB"
-
-5. Pipeline with JSON output:
+4. Pipeline with JSON output:
    isc task list --json | jq '.data.items[].id'
-   isc db list --json | jq '.data.items[] | select(.type=="mysql")'
 
 ================================================================================
 Output Format
