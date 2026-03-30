@@ -9,14 +9,41 @@
 ```bash
 git clone git@github.com:chaozwn/infinisynapse-cli.git
 cd infinisynapse-cli
-go build -o agent_infini .
+make build
 ```
 
-Windows 下会生成 `agent_infini.exe`，Linux/macOS 下生成 `agent_infini`。
+构建产物位于 `build/agent_infini`。
+
+### 交叉编译全平台
+
+```bash
+make cross
+```
+
+在 `build/` 目录下生成：
+
+| 路径 | 平台 |
+|---|---|
+| `build/linux-amd64/agent_infini` | Linux x86_64 |
+| `build/linux-arm64/agent_infini` | Linux ARM64 |
+| `build/darwin-amd64/agent_infini` | macOS Intel |
+| `build/darwin-arm64/agent_infini` | macOS Apple Silicon |
+| `build/windows-amd64/agent_infini.exe` | Windows x86_64 |
+| `build/windows-arm64/agent_infini.exe` | Windows ARM64 |
+
+### 其他构建命令
+
+```bash
+make install   # 安装到 $GOPATH/bin
+make test      # 运行测试
+make clean     # 清理构建产物
+make help      # 查看所有可用命令
+```
 
 ### 环境要求
 
 - Go 1.22+
+- Make
 
 ## 快速开始
 
