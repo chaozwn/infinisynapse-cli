@@ -116,16 +116,57 @@ var taskShowCmd = &cobra.Command{
 			return nil
 		}
 
-		data, err := c.Get(fmt.Sprintf("/api/ai_task/getTaskInfo/%s", args[0]), nil)
-		if err != nil {
-			output.PrintResult(nil, err)
+		taskID := args[0]
+
+		type taskInfoResult struct {
+			data json.RawMessage
+			err  error
+		}
+		type uiMsgResult struct {
+			data json.RawMessage
+			err  error
+		}
+
+		taskInfoCh := make(chan taskInfoResult, 1)
+		uiMsgCh := make(chan uiMsgResult, 1)
+
+		go func() {
+			d, e := c.Get(fmt.Sprintf("/api/ai_task/getTaskInfo/%s", taskID), nil)
+			taskInfoCh <- taskInfoResult{d, e}
+		}()
+		go func() {
+			d, e := c.Get("/api/ai_task/getUiMessageById", map[string]string{"id": taskID})
+			uiMsgCh <- uiMsgResult{d, e}
+		}()
+
+		tiRes := <-taskInfoCh
+		if tiRes.err != nil {
+			output.PrintResult(nil, tiRes.err)
 			return nil
 		}
 
-		var parsed interface{}
-		if err := json.Unmarshal(data, &parsed); err != nil {
+		var parsed map[string]interface{}
+		if err := json.Unmarshal(tiRes.data, &parsed); err != nil {
 			output.PrintResult(nil, fmt.Errorf("failed to parse task info: %w", err))
 			return nil
+		}
+
+		umRes := <-uiMsgCh
+		if umRes.err == nil && umRes.data != nil {
+			var messages []json.RawMessage
+			if err := json.Unmarshal(umRes.data, &messages); err == nil && len(messages) > 0 {
+				for i := len(messages) - 1; i >= 0; i-- {
+					var msg map[string]interface{}
+					if err := json.Unmarshal(messages[i], &msg); err != nil {
+						continue
+					}
+					if msg["ask"] == "completion_result" {
+						continue
+					}
+					parsed["lastInfiniMessage"] = msg
+					break
+				}
+			}
 		}
 
 		output.PrintResult(parsed, nil)
