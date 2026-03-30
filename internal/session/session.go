@@ -24,7 +24,7 @@ func sessionsDir() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("cannot find home directory: %w", err)
 	}
-	dir := filepath.Join(home, ".isc", "sessions")
+	dir := filepath.Join(home, ".agent_infini", "sessions")
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return "", fmt.Errorf("cannot create sessions directory: %w", err)
 	}

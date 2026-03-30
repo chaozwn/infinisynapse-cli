@@ -13,7 +13,7 @@ var sessionCmd = &cobra.Command{
 	Short: "Manage chat sessions",
 	Long: `Manage session aliases used for multi-turn chat conversations.
 
-Sessions automatically save and restore the task ID between 'isc chat' calls,
+Sessions automatically save and restore the task ID between 'agent_infini chat' calls,
 enabling seamless multi-turn workflows without manually tracking task IDs.`,
 }
 

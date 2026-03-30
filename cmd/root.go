@@ -26,15 +26,16 @@ func getOutputFormat() output.Format {
 }
 
 var skipConfigCmds = map[string]bool{
+	"init":    true,
 	"skill":   true,
 	"version": true,
 	"help":    true,
 }
 
 var rootCmd = &cobra.Command{
-	Use:   "isc",
+	Use:   "agent_infini",
 	Short: "InfiniSynapse CLI - command line tool for InfiniSynapse",
-	Long: `isc is a CLI tool that allows you to interact with InfiniSynapse backend APIs
+	Long: `agent_infini is a CLI tool that allows you to interact with InfiniSynapse backend APIs
 from the terminal, designed for both human users and AI agent workflows.
 
 Key Features:
@@ -43,13 +44,13 @@ Key Features:
   - Unified JSON output for pipeline composability
 
 Quick Start:
-  isc chat "Hello, analyze my data" --session main
-  isc chat "Show me the trends" --session main
+  agent_infini chat "Hello, analyze my data" --session main
+  agent_infini chat "Show me the trends" --session main
 
-Use 'isc --skill' or 'isc skill' for detailed command specifications.
+Use 'agent_infini --skill' or 'agent_infini skill' for detailed command specifications.
 
 For more information about a specific command, use:
-  isc [command] --help`,
+  agent_infini [command] --help`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		if showSkill || skipConfigCmds[cmd.Name()] {
 			return nil

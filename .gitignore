@@ -4,7 +4,7 @@
 *.dll
 *.so
 *.dylib
-isc
+agent_infini
 
 # Test binary
 *.test

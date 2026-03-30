@@ -22,8 +22,8 @@ var chatCmd = &cobra.Command{
 	Long: `Send a message to the AI and receive streaming responses.
 
 Use --session to maintain context across multiple calls:
-  isc chat "Analyze my data" --session main
-  isc chat "Show trends" --session main
+  agent_infini chat "Analyze my data" --session main
+  agent_infini chat "Show trends" --session main
 
 Use --task-id to continue a specific conversation (overrides --session).`,
 	Args: cobra.ExactArgs(1),

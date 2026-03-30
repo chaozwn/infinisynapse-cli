@@ -10,7 +10,7 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
-const toolName = "isc"
+const toolName = "agent_infini"
 
 const (
 	KeyServer = "server"
@@ -106,6 +106,39 @@ func buildCandidates(home string) []candidate {
 		candidate{path: filepath.Join(iscDir, "config.json"), format: "json"},
 	)
 	return out
+}
+
+func ConfigDir() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("cannot find home directory: %w", err)
+	}
+	return filepath.Join(home, "."+toolName), nil
+}
+
+func Save(values map[string]string) error {
+	dir, err := ConfigDir()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return fmt.Errorf("cannot create config directory: %w", err)
+	}
+
+	for k, v := range values {
+		cfg.Global[k] = v
+	}
+
+	data, err := yaml.Marshal(&cfg)
+	if err != nil {
+		return fmt.Errorf("cannot marshal config: %w", err)
+	}
+
+	path := filepath.Join(dir, "config.key")
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		return fmt.Errorf("cannot write config file: %w", err)
+	}
+	return nil
 }
 
 func Get(key string) string {

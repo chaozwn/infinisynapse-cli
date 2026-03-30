@@ -6,7 +6,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const skillSpec = `# isc (InfiniSynapse CLI) Skill Specification
+const skillSpec = `# agent_infini (InfiniSynapse CLI) Skill Specification
 
 A CLI tool for interacting with the InfiniSynapse backend, designed for AI agent workflows.
 
@@ -15,24 +15,27 @@ AI Agent Important Notes
 ================================================================================
 
 First-time Setup:
-  Before using any other commands, you MUST create ~/.isc/config.key:
-  mkdir -p ~/.isc && cat > ~/.isc/config.key << 'EOF'
+  Before using any other commands, run init to configure:
+  agent_infini init --api-key "your_api_key"
+
+  Or manually create ~/.agent_infini/config.key:
+  mkdir -p ~/.agent_infini && cat > ~/.agent_infini/config.key << 'EOF'
   global:
-    server: "http://app.infinisynapse.cn"
+    server: "https://app.infinisynapse.cn"
     api-key: "your_api_key"
   EOF
 
 Session Workflow (multi-turn chat):
   1. Start a new conversation with a session alias:
-     isc chat "Analyze my data" --session main
+     agent_infini chat "Analyze my data" --session main
   2. Continue the conversation (auto-resumes context):
-     isc chat "Show me the trends" --session main
+     agent_infini chat "Show me the trends" --session main
   3. Manage sessions:
-     isc session ls              # List all sessions
-     isc session show main       # View session details
-     isc session rm main         # Delete a session
+     agent_infini session ls              # List all sessions
+     agent_infini session show main       # View session details
+     agent_infini session rm main         # Delete a session
 
-Without --session, each 'isc chat' starts a fresh conversation.
+Without --session, each 'agent_infini chat' starts a fresh conversation.
 
 ================================================================================
 Available Commands
@@ -79,20 +82,20 @@ Common Scenarios
 ================================================================================
 
 1. Quick one-shot question:
-   isc chat "What tables are in my database?"
+   agent_infini chat "What tables are in my database?"
 
 2. Multi-turn analysis with session:
-   isc chat "Analyze the users table schema" --session analysis
-   isc chat "Now show me the top 10 users by activity" --session analysis
-   isc chat "Generate a summary report" --session analysis
+   agent_infini chat "Analyze the users table schema" --session analysis
+   agent_infini chat "Now show me the top 10 users by activity" --session analysis
+   agent_infini chat "Generate a summary report" --session analysis
 
 3. Task management:
-   isc task list --size 20
-   isc task show <task-id>
-   isc task delete <task-id>
+   agent_infini task list --size 20
+   agent_infini task show <task-id>
+   agent_infini task delete <task-id>
 
 4. Pipeline with JSON output:
-   isc task list --json | jq '.data.items[].id'
+   agent_infini task list --json | jq '.data.items[].id'
 
 ================================================================================
 Output Format
@@ -109,7 +112,7 @@ Table mode (default-output: "table" in config.key):
 Error Handling
 ================================================================================
 
-  - Token expired:     Update api-key in ~/.isc/config.key
+  - Token expired:     Update api-key in ~/.agent_infini/config.key
   - Server unreachable: Check --server URL and network connectivity
   - Session not found:  A new conversation will be started automatically
 
@@ -117,23 +120,23 @@ Error Handling
 Configuration & Credential Chain
 ================================================================================
 
-Session files: ~/.isc/sessions/<name>.json
+Session files: ~/.agent_infini/sessions/<name>.json
 
 Configuration is loaded from the first file found in this order
 (per execute_external_tool_resolver.py):
 
-  1. <binary_dir>/isc.key          (tool_basename.key, YAML)
-  2. <binary_dir>/<filename>.key   (tool_filename.key, compat)
-  3. ~/.isc/config.key             (YAML, recommended)
-  4. ~/.isc/config.json            (JSON)
+  1. <binary_dir>/agent_infini.key          (tool_basename.key, YAML)
+  2. <binary_dir>/<filename>.key            (tool_filename.key, compat)
+  3. ~/.agent_infini/config.key             (YAML, recommended)
+  4. ~/.agent_infini/config.json            (JSON)
 
-The most common approach: create ~/.isc/ and place config.key or config.json.
+The most common approach: run 'agent_infini init' or create ~/.agent_infini/ and place config.key or config.json.
 config.key and config.json are alternatives; if config.key exists, config.json
 is not checked.
 
 config.key format (YAML):
   global:
-    server: "http://app.infinisynapse.cn"
+    server: "https://app.infinisynapse.cn"
     api-key: "your_api_key"
     default-output: "json"
     lang: "zh-CN"
@@ -141,7 +144,7 @@ config.key format (YAML):
 config.json format (JSON):
   {
     "global": {
-      "server": "http://app.infinisynapse.cn",
+      "server": "https://app.infinisynapse.cn",
       "api-key": "your_api_key"
     }
   }
