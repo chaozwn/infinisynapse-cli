@@ -13,15 +13,17 @@ import (
 const toolName = "agent_infini"
 
 const (
-	KeyServer = "server"
-	KeyAPIKey = "api-key"
-	KeyOutput = "default-output"
-	KeyLang   = "lang"
+	KeyServer         = "server"
+	KeyAPIKey         = "api-key"
+	KeyOutput         = "default-output"
+	KeyPreferLanguage = "prefer-language"
 )
 
+var SupportedLanguages = []string{"en", "zh_CN", "ar", "ja", "ko", "ru"}
+
 var defaults = map[string]string{
-	KeyOutput: "json",
-	KeyLang:   "zh-CN",
+	KeyOutput:         "json",
+	KeyPreferLanguage: "zh_CN",
 }
 
 // configFile mirrors the WinClaw config.key / config.json structure.
@@ -125,6 +127,9 @@ func Save(values map[string]string) error {
 		return fmt.Errorf("cannot create config directory: %w", err)
 	}
 
+	if cfg.Global == nil {
+		cfg.Global = make(map[string]string)
+	}
 	for k, v := range values {
 		cfg.Global[k] = v
 	}
@@ -148,7 +153,38 @@ func Get(key string) string {
 	return defaults[key]
 }
 
-func GetServer() string        { return Get(KeyServer) }
-func GetToken() string         { return Get(KeyAPIKey) }
-func GetDefaultOutput() string { return Get(KeyOutput) }
-func GetLang() string          { return Get(KeyLang) }
+func GetServer() string         { return Get(KeyServer) }
+func GetToken() string          { return Get(KeyAPIKey) }
+func GetDefaultOutput() string  { return Get(KeyOutput) }
+func GetPreferLanguage() string { return Get(KeyPreferLanguage) }
+
+// IsInitialized reports whether a config file with a non-empty API key exists.
+func IsInitialized() bool {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return false
+	}
+	for _, c := range buildCandidates(home) {
+		data, err := os.ReadFile(c.path)
+		if err != nil {
+			continue
+		}
+		var parsed configFile
+		switch c.format {
+		case "yaml":
+			if err := yaml.Unmarshal(data, &parsed); err != nil {
+				continue
+			}
+		case "json":
+			if err := json.Unmarshal(data, &parsed); err != nil {
+				continue
+			}
+		}
+		if parsed.Global != nil {
+			if key, ok := parsed.Global[KeyAPIKey]; ok && key != "" {
+				return true
+			}
+		}
+	}
+	return false
+}

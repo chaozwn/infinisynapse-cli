@@ -1,7 +1,10 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
+	"strconv"
+	"time"
 
 	"github.com/chaozwn/infinisynapse-cli/internal/output"
 	"github.com/chaozwn/infinisynapse-cli/internal/session"
@@ -80,22 +83,83 @@ var sessionRemoveCmd = &cobra.Command{
 	},
 }
 
+var sessionUseCmd = &cobra.Command{
+	Use:   "use [name]",
+	Short: "Create (if needed) and set a session as current",
+	Long: `Set the named session as the current active session.
+If the session does not exist, it will be created.
+Subsequent 'chat' calls without --session will use this session automatically.`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		name := args[0]
+
+		if !session.Exists(name) {
+			taskID := strconv.FormatInt(time.Now().UnixMilli(), 10)
+			cwd, _ := os.Getwd()
+			if err := session.Save(name, taskID, "", cwd); err != nil {
+				return fmt.Errorf("failed to create session '%s': %w", name, err)
+			}
+			output.PrintSuccess("Session '%s' created (taskId: %s)", name, taskID)
+		}
+
+		if err := session.SetCurrent(name); err != nil {
+			return fmt.Errorf("failed to set current session: %w", err)
+		}
+		output.PrintSuccess("Current session set to '%s'", name)
+		return nil
+	},
+}
+
+var sessionCurrentCmd = &cobra.Command{
+	Use:   "current",
+	Short: "Show the current active session",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		name, err := session.GetCurrent()
+		if err != nil {
+			return fmt.Errorf("failed to read current session: %w", err)
+		}
+		if name == "" {
+			output.PrintSuccess("No current session set. Use 'agent_infini session use <name>' to set one.")
+			return nil
+		}
+
+		sess, err := session.Load(name)
+		if err != nil {
+			return fmt.Errorf("current session '%s' is set but cannot be loaded: %w", name, err)
+		}
+
+		printer := output.NewPrinter(getOutputFormat())
+		return printer.PrintJSON(sess)
+	},
+}
+
 func init() {
 	sessionCmd.AddCommand(sessionListCmd)
 	sessionCmd.AddCommand(sessionShowCmd)
 	sessionCmd.AddCommand(sessionRemoveCmd)
+	sessionCmd.AddCommand(sessionUseCmd)
+	sessionCmd.AddCommand(sessionCurrentCmd)
 
 	rootCmd.AddCommand(sessionCmd)
+}
+
+func resolveSessionName(sessionName string) string {
+	if sessionName != "" {
+		return sessionName
+	}
+	cur, _ := session.GetCurrent()
+	return cur
 }
 
 func resolveTaskIDFromSession(sessionName, explicitTaskID string) string {
 	if explicitTaskID != "" {
 		return explicitTaskID
 	}
-	if sessionName == "" {
+	name := resolveSessionName(sessionName)
+	if name == "" {
 		return ""
 	}
-	sess, err := session.Load(sessionName)
+	sess, err := session.Load(name)
 	if err != nil {
 		return ""
 	}
@@ -103,9 +167,10 @@ func resolveTaskIDFromSession(sessionName, explicitTaskID string) string {
 }
 
 func saveSession(sessionName, taskID, connID string) {
-	if sessionName == "" || taskID == "" {
+	name := resolveSessionName(sessionName)
+	if name == "" || taskID == "" {
 		return
 	}
 	cwd, _ := os.Getwd()
-	_ = session.Save(sessionName, taskID, connID, cwd)
+	_ = session.Save(name, taskID, connID, cwd)
 }

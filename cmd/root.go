@@ -32,6 +32,14 @@ var skipConfigCmds = map[string]bool{
 	"help":    true,
 }
 
+func printInitHint() {
+	if config.IsInitialized() {
+		fmt.Fprintf(os.Stderr, "\n[OK] Configuration initialized.\n")
+	} else {
+		fmt.Fprintf(os.Stderr, "\n[WARNING] Not initialized. Run 'agent_infini init --help' to get started.\n")
+	}
+}
+
 var rootCmd = &cobra.Command{
 	Use:   "agent_infini",
 	Short: "InfiniSynapse CLI - command line tool for InfiniSynapse",
@@ -39,13 +47,13 @@ var rootCmd = &cobra.Command{
 from the terminal, designed for both human users and AI agent workflows.
 
 Key Features:
-  - Chat with AI (streaming) with session-based multi-turn support
-  - Task, database, and settings management
+  - Chat with AI with session-based multi-turn support
   - Unified JSON output for pipeline composability
 
 Quick Start:
-  agent_infini chat "Hello, analyze my data" --session main
-  agent_infini chat "Show me the trends" --session main
+  agent_infini session current                  # View the current active session
+  agent_infini session use main                 # Create & activate a session named "main"
+  agent_infini chat "Hello, analyze my data"    # Chat using the current session
 
 Use 'agent_infini --skill' or 'agent_infini skill' for detailed command specifications.
 
@@ -60,6 +68,7 @@ For more information about a specific command, use:
 	Run: func(cmd *cobra.Command, args []string) {
 		if showSkill {
 			fmt.Print(skillSpec)
+			printInitHint()
 			return
 		}
 		cmd.Help()
@@ -74,12 +83,19 @@ func init() {
 		"Output in JSON format: {success, data, error}")
 	rootCmd.Flags().BoolVar(&showSkill, "skill", false,
 		"Show the detailed command specification")
+
+	defaultHelp := rootCmd.HelpFunc()
+	rootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
+		defaultHelp(cmd, args)
+		printInitHint()
+	})
 }
 
 func Execute() error {
 	for i := 1; i < len(os.Args); i++ {
 		if os.Args[i] == "--skill" && i == 1 {
 			fmt.Print(skillSpec)
+			printInitHint()
 			return nil
 		}
 	}

@@ -37,7 +37,7 @@ func New() (*Client, error) {
 	return &Client{
 		baseURL: server,
 		token:   token,
-		lang:    config.GetLang(),
+		lang:    config.GetPreferLanguage(),
 		httpClient: &http.Client{
 			Timeout: 100 * time.Second,
 		},
@@ -60,7 +60,7 @@ func NewWithOverrides(server, token string) (*Client, error) {
 	return &Client{
 		baseURL: server,
 		token:   token,
-		lang:    config.GetLang(),
+		lang:    config.GetPreferLanguage(),
 		httpClient: &http.Client{
 			Timeout: 100 * time.Second,
 		},

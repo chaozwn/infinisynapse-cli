@@ -161,6 +161,7 @@ var skillCmd = &cobra.Command{
 	Long:  "Display the complete skill specification, designed for AI agents.",
 	Run: func(cmd *cobra.Command, args []string) {
 		fmt.Print(skillSpec)
+		printInitHint()
 	},
 }
 

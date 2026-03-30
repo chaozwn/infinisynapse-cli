@@ -133,5 +133,60 @@ func Delete(name string) error {
 		}
 		return fmt.Errorf("failed to delete session '%s': %w", name, err)
 	}
+
+	if cur, _ := GetCurrent(); cur == name {
+		_ = ClearCurrent()
+	}
+	return nil
+}
+
+func Exists(name string) bool {
+	fp, err := sessionFilePath(name)
+	if err != nil {
+		return false
+	}
+	_, err = os.Stat(fp)
+	return err == nil
+}
+
+func currentFilePath() (string, error) {
+	dir, err := sessionsDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, ".current"), nil
+}
+
+func SetCurrent(name string) error {
+	fp, err := currentFilePath()
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(fp, []byte(name), 0644)
+}
+
+func GetCurrent() (string, error) {
+	fp, err := currentFilePath()
+	if err != nil {
+		return "", err
+	}
+	data, err := os.ReadFile(fp)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	return strings.TrimSpace(string(data)), nil
+}
+
+func ClearCurrent() error {
+	fp, err := currentFilePath()
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(fp); err != nil && !os.IsNotExist(err) {
+		return err
+	}
 	return nil
 }
