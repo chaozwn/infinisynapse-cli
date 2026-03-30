@@ -176,35 +176,6 @@ Multiple IDs can be separated by commas or spaces:
 	},
 }
 
-var taskStateCmd = &cobra.Command{
-	Use:   "state",
-	Short: "Get AI state for a task",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := client.New()
-		if err != nil {
-			return err
-		}
-
-		tid := globalTaskID
-		if flagTID, _ := cmd.Flags().GetString("task-id"); flagTID != "" {
-			tid = flagTID
-		}
-
-		params := map[string]string{}
-		if tid != "" {
-			params["taskId"] = tid
-		}
-
-		data, err := c.Get("/api/ai/state", params)
-		if err != nil {
-			return err
-		}
-
-		printer := output.NewPrinter(getOutputFormat())
-		return printer.PrintJSON(data)
-	},
-}
-
 var taskCancelCmd = &cobra.Command{
 	Use:   "cancel",
 	Short: "Cancel a running task",
@@ -252,14 +223,12 @@ func init() {
 	taskListCmd.Flags().Int("page-size", 10, "Number of items per page")
 	taskListCmd.Flags().String("search", "", "Search tasks by name")
 
-	taskStateCmd.Flags().String("task-id", "", "Get state for specific task")
 	taskCancelCmd.Flags().String("task-id", "", "Task ID to cancel")
 
 	taskCmd.AddCommand(taskNewCmd)
 	taskCmd.AddCommand(taskListCmd)
 	taskCmd.AddCommand(taskShowCmd)
 	taskCmd.AddCommand(taskRemoveCmd)
-	taskCmd.AddCommand(taskStateCmd)
 	taskCmd.AddCommand(taskCancelCmd)
 
 	rootCmd.AddCommand(taskCmd)
