@@ -20,6 +20,7 @@ type StreamResult struct {
 	ConnID      string
 	Status      string
 	LastAskType string
+	LastMessage *StreamEvent
 }
 
 func RunNewTask(query string, jsonMode bool) (*StreamResult, error) {
@@ -74,27 +75,11 @@ func runStreamingChat(connID string, msg types.WebviewMessage, jsonMode bool) (*
 	sseClient := client.NewSSEClient(c)
 	sseDone := make(chan error, 1)
 	sseReady := make(chan struct{})
-	textLenByTs := make(map[int64]int)
 
 	var capturedTaskID string
 	var sessionStatus string
 	var lastAskType string
-
-	skipSayTypes := map[string]bool{
-		"task":             true,
-		"user_feedback":    true,
-		"api_req_started":  true,
-		"api_req_finished": true,
-		"api_req_retried":  true,
-		"deleted_api_reqs": true,
-	}
-
-	printableSayTypes := map[string]bool{
-		"text":              true,
-		"completion_result": true,
-		"reasoning":         true,
-		"error":             true,
-	}
+	var lastMessage *StreamEvent
 
 	go func() {
 		err := sseClient.Subscribe(ctx, fmt.Sprintf("/api/ai/events?connId=%s", connID), sseReady, func(event client.SSEEvent) bool {
@@ -136,27 +121,13 @@ func runStreamingChat(connID string, msg types.WebviewMessage, jsonMode bool) (*
 					return false
 				}
 
-				if m.Type != "say" || skipSayTypes[m.Say] {
-					return true
-				}
-				if !printableSayTypes[m.Say] {
-					return true
-				}
-
-				text := m.Text
-				if m.Say == "reasoning" && m.Reasoning != "" {
-					text = m.Reasoning
+				if m.Type == "say" && m.Ask != "completion_result" {
+					ev := &StreamEvent{TaskID: capturedTaskID, Ts: m.Ts, Type: m.Type, Say: m.Say, Text: m.Text, Reasoning: m.Reasoning, Partial: m.Partial}
+					lastMessage = ev
 				}
 
 				if jsonMode {
 					emitJSON(StreamEvent{TaskID: capturedTaskID, Ts: m.Ts, Type: m.Type, Say: m.Say, Text: m.Text, Reasoning: m.Reasoning, Partial: m.Partial})
-				} else {
-					lastLen := textLenByTs[m.Ts]
-					if text != "" && len(text) > lastLen {
-						delta := text[lastLen:]
-						fmt.Print(delta)
-						textLenByTs[m.Ts] = len(text)
-					}
 				}
 
 			case "message.add":
@@ -170,24 +141,18 @@ func runStreamingChat(connID string, msg types.WebviewMessage, jsonMode bool) (*
 
 				m := payload.Message
 
-				if m.Type == "say" && printableSayTypes[m.Say] {
-					if jsonMode {
-						emitJSON(StreamEvent{TaskID: capturedTaskID, Ts: m.Ts, Type: m.Type, Say: m.Say, Text: m.Text, Reasoning: m.Reasoning, Partial: m.Partial})
-					} else {
-						text := m.Text
-						lastLen := textLenByTs[m.Ts]
-						if text != "" && len(text) > lastLen {
-							fmt.Print(text[lastLen:])
-						}
-					}
+				if !(m.Type == "ask" && m.Ask == "completion_result") {
+					ev := &StreamEvent{TaskID: capturedTaskID, Ts: m.Ts, Type: m.Type, Say: m.Say, Ask: m.Ask, Text: m.Text, Reasoning: m.Reasoning, Partial: m.Partial}
+					lastMessage = ev
+				}
+
+				if jsonMode {
+					emitJSON(StreamEvent{TaskID: capturedTaskID, Ts: m.Ts, Type: m.Type, Say: m.Say, Ask: m.Ask, Text: m.Text, Reasoning: m.Reasoning, Partial: m.Partial})
 				}
 
 				if m.Type == "ask" && !m.Partial {
 					sessionStatus = "asking"
 					lastAskType = m.Ask
-					if jsonMode {
-						emitJSON(StreamEvent{TaskID: capturedTaskID, Ts: m.Ts, Type: m.Type, Ask: m.Ask, Text: m.Text, Partial: m.Partial})
-					}
 					return false
 				}
 				if m.Say == "completion_result" {
@@ -248,7 +213,6 @@ func runStreamingChat(connID string, msg types.WebviewMessage, jsonMode bool) (*
 		if postErr != nil {
 			cancel()
 			<-sseDone
-			fmt.Println()
 			return nil, fmt.Errorf("failed to send message: %w", postErr)
 		}
 		select {
@@ -261,10 +225,6 @@ func runStreamingChat(connID string, msg types.WebviewMessage, jsonMode bool) (*
 	case <-ctx.Done():
 	}
 
-	if !jsonMode {
-		fmt.Println()
-	}
-
 	if capturedTaskID == "" && msg.TaskID != "" {
 		capturedTaskID = msg.TaskID
 	}
@@ -274,6 +234,7 @@ func runStreamingChat(connID string, msg types.WebviewMessage, jsonMode bool) (*
 		ConnID:      connID,
 		Status:      sessionStatus,
 		LastAskType: lastAskType,
+		LastMessage: lastMessage,
 	}, nil
 }
 

@@ -14,6 +14,25 @@ import (
 	"github.com/spf13/cobra"
 )
 
+func fetchTaskWorkspace(c *client.Client, taskID string) []string {
+	data, err := c.Get(fmt.Sprintf("/api/ai_task/getTaskWorkspace/%s", taskID), nil)
+	if err != nil {
+		return nil
+	}
+	var ws struct {
+		Cwd   string   `json:"cwd"`
+		Files []string `json:"files"`
+	}
+	if err := json.Unmarshal(data, &ws); err != nil {
+		return nil
+	}
+	full := make([]string, len(ws.Files))
+	for i, f := range ws.Files {
+		full[i] = ws.Cwd + "/" + f
+	}
+	return full
+}
+
 var taskCmd = &cobra.Command{
 	Use:   "task",
 	Short: "Manage tasks and chat",
@@ -39,8 +58,21 @@ Manage tasks:
 			return fmt.Errorf("--task-id / -t is required when using --query")
 		}
 
-		_, err := task.RunAskResponse(globalTaskID, query, jsonOutput)
-		return err
+		result, err := task.RunAskResponse(globalTaskID, query, jsonOutput)
+		if err != nil {
+			output.PrintResult(nil, err)
+			return nil
+		}
+		if !jsonOutput {
+			c, cerr := client.New()
+			res := map[string]interface{}{"lastMessage": result.LastMessage, "taskId": result.TaskID, "status": result.Status}
+			if cerr == nil {
+				files := fetchTaskWorkspace(c, result.TaskID)
+				res["workspace"] = map[string]interface{}{"files": files}
+			}
+			output.PrintResult(res, nil)
+		}
+		return nil
 	},
 }
 
@@ -58,8 +90,21 @@ Examples:
 			return fmt.Errorf("--query is required")
 		}
 
-		_, err := task.RunNewTask(query, jsonOutput)
-		return err
+		result, err := task.RunNewTask(query, jsonOutput)
+		if err != nil {
+			output.PrintResult(nil, err)
+			return nil
+		}
+		if !jsonOutput {
+			c, cerr := client.New()
+			res := map[string]interface{}{"lastMessage": result.LastMessage, "taskId": result.TaskID, "status": result.Status}
+			if cerr == nil {
+				files := fetchTaskWorkspace(c, result.TaskID)
+				res["workspace"] = map[string]interface{}{"files": files}
+			}
+			output.PrintResult(res, nil)
+		}
+		return nil
 	},
 }
 
@@ -127,8 +172,14 @@ var taskShowCmd = &cobra.Command{
 			err  error
 		}
 
+		type wsResult struct {
+			data json.RawMessage
+			err  error
+		}
+
 		taskInfoCh := make(chan taskInfoResult, 1)
 		uiMsgCh := make(chan uiMsgResult, 1)
+		wsCh := make(chan wsResult, 1)
 
 		go func() {
 			d, e := c.Get(fmt.Sprintf("/api/ai_task/getTaskInfo/%s", taskID), nil)
@@ -137,6 +188,10 @@ var taskShowCmd = &cobra.Command{
 		go func() {
 			d, e := c.Get("/api/ai_task/getUiMessageById", map[string]string{"id": taskID})
 			uiMsgCh <- uiMsgResult{d, e}
+		}()
+		go func() {
+			d, e := c.Get(fmt.Sprintf("/api/ai_task/getTaskWorkspace/%s", taskID), nil)
+			wsCh <- wsResult{d, e}
 		}()
 
 		tiRes := <-taskInfoCh
@@ -166,6 +221,21 @@ var taskShowCmd = &cobra.Command{
 					parsed["lastInfiniMessage"] = msg
 					break
 				}
+			}
+		}
+
+		wsRes := <-wsCh
+		if wsRes.err == nil && wsRes.data != nil {
+			var ws struct {
+				Cwd   string   `json:"cwd"`
+				Files []string `json:"files"`
+			}
+			if err := json.Unmarshal(wsRes.data, &ws); err == nil {
+				full := make([]string, len(ws.Files))
+				for i, f := range ws.Files {
+					full[i] = ws.Cwd + "/" + f
+				}
+				parsed["workspace"] = map[string]interface{}{"files": full}
 			}
 		}
 
