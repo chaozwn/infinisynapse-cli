@@ -10,9 +10,8 @@ import (
 )
 
 var (
-	globalTaskID string
-	jsonOutput   bool
-	showSkill    bool
+	jsonOutput bool
+	showSkill  bool
 )
 
 func getOutputFormat() output.Format {
@@ -51,8 +50,8 @@ Key Features:
   - Unified JSON output for pipeline composability
 
 Quick Start:
-  agent_infini task new --query "Analyze my data"
-  agent_infini task -t <taskId> -q "Show trends"
+  agent_infini task new "Analyze my data"
+  agent_infini task ask <taskId> "Show trends"
   agent_infini task ls
 
 Use 'agent_infini --skill' or 'agent_infini skill' for detailed command specifications.
@@ -77,8 +76,6 @@ For more information about a specific command, use:
 
 func init() {
 	rootCmd.Version = Version
-	rootCmd.PersistentFlags().StringVarP(&globalTaskID, "task-id", "t", "",
-		"Task ID for continuing a conversation")
 	rootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false,
 		"Output in JSON format: {success, data, error}")
 	rootCmd.Flags().BoolVar(&showSkill, "skill", false,

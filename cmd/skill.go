@@ -27,33 +27,40 @@ First-time Setup:
 
 Task Workflow (multi-turn chat):
   1. Create a task:
-     agent_infini task new --query "Analyze my data"
+     agent_infini task new "Analyze my data"
   2. Continue the conversation (respond to server ask):
-     agent_infini task -t <taskId> --query "Show me the trends"
+     agent_infini task ask <taskId> "Show me the trends"
   3. Manage tasks:
      agent_infini task ls                        # List tasks (paginated)
      agent_infini task ls --search "analysis"    # Search by name
      agent_infini task show <taskId>             # View task details
      agent_infini task rm <taskId>               # Delete a task
+  4. Workspace files:
+     agent_infini task file <taskId>             # List workspace files
+     agent_infini task preview <taskId> <path>   # Preview file content
+     agent_infini task download <taskId> <path>  # Download file to local
 
 ================================================================================
 Available Commands
 ================================================================================
 
   version                                          Print version, commit, build date, Go runtime
-  task new --query <message>                       Create a new task (newTask)
-  task -t <taskId> --query <message>               Continue conversation in task (askResponse)
+  task new <query>                                 Create a new task (newTask)
+  task new --query <message>                       (alternative flag form)
+  task ask <taskId> <query>                        Continue conversation in task (askResponse)
+  task ask <taskId> --query <message>              (alternative flag form)
   task ls [--page N] [--page-size N] [--search Q]  List tasks with pagination and search
   task show <taskId>                               Show task details
   task rm <taskId> [taskId2...]                    Delete one or more tasks
-  task state [--task-id <taskId>]                  Get AI state for a task
-  task cancel --task-id <taskId>                   Cancel a running task
+  task cancel <taskId>                             Cancel a running task
+  task file <taskId>                               List workspace files
+  task preview <taskId> <fileName>                  Preview workspace file to stdout
+  task download <taskId> <fileName> [-o dir]       Download workspace file to local disk
 
 ================================================================================
 Global Flags
 ================================================================================
 
-  --task-id, -t <id>   Task ID for continuing a conversation
   --json               Force JSON output: {"success": true, "data": ...}
   --skill              Show this detailed specification
   --version, -v        Print version string
@@ -64,12 +71,12 @@ Common Scenarios
 ================================================================================
 
 1. Start a new analysis task:
-   agent_infini task new --query "What tables are in my database?"
+   agent_infini task new "What tables are in my database?"
 
 2. Multi-turn analysis:
-   agent_infini task new --query "Analyze the users table schema"
-   agent_infini task -t <taskId> -q "Now show me the top 10 users by activity"
-   agent_infini task -t <taskId> -q "Generate a summary report"
+   agent_infini task new "Analyze the users table schema"
+   agent_infini task ask <taskId> "Now show me the top 10 users by activity"
+   agent_infini task ask <taskId> "Generate a summary report"
 
 3. Browse tasks:
    agent_infini task ls
@@ -77,7 +84,12 @@ Common Scenarios
    agent_infini task show <taskId>
 
 4. Cancel a running task:
-   agent_infini task cancel --task-id <taskId>
+   agent_infini task cancel <taskId>
+
+5. Work with workspace files:
+   agent_infini task file <taskId>
+   agent_infini task preview <taskId> analysis.py
+   agent_infini task download <taskId> report.csv -o ./results/
 
 ================================================================================
 Output Format

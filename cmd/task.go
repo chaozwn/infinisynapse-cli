@@ -3,6 +3,10 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -13,6 +17,10 @@ import (
 
 	"github.com/spf13/cobra"
 )
+
+// ---------------------------------------------------------------------------
+// helpers
+// ---------------------------------------------------------------------------
 
 func fetchTaskStatus(c *client.Client, taskID string) string {
 	data, err := c.Get(fmt.Sprintf("/api/ai_task/getTaskInfo/%s", taskID), nil)
@@ -28,24 +36,58 @@ func fetchTaskStatus(c *client.Client, taskID string) string {
 	return info.Status
 }
 
-func fetchTaskWorkspace(c *client.Client, taskID string) []string {
+type workspaceInfo struct {
+	Cwd   string   `json:"cwd"`
+	Files []string `json:"files"`
+}
+
+type filePreviewResponse struct {
+	Content  *string `json:"content"`
+	FileType string  `json:"fileType"`
+}
+
+func (ws *workspaceInfo) FullPaths() []string {
+	if ws == nil {
+		return nil
+	}
+	paths := make([]string, len(ws.Files))
+	for i, f := range ws.Files {
+		paths[i] = ws.Cwd + "/" + f
+	}
+	return paths
+}
+
+func fetchWorkspaceInfo(c *client.Client, taskID string) *workspaceInfo {
 	data, err := c.Get(fmt.Sprintf("/api/ai_task/getTaskWorkspace/%s", taskID), nil)
 	if err != nil {
 		return nil
 	}
-	var ws struct {
-		Cwd   string   `json:"cwd"`
-		Files []string `json:"files"`
-	}
+	var ws workspaceInfo
 	if err := json.Unmarshal(data, &ws); err != nil {
 		return nil
 	}
-	full := make([]string, len(ws.Files))
-	for i, f := range ws.Files {
-		full[i] = ws.Cwd + "/" + f
-	}
-	return full
+	return &ws
 }
+
+func enrichStreamResult(result *task.StreamResult) map[string]interface{} {
+	res := map[string]interface{}{
+		"lastMessage": result.LastMessage,
+		"taskId":      result.TaskID,
+	}
+	c, err := client.New()
+	if err != nil {
+		return res
+	}
+	res["status"] = fetchTaskStatus(c, result.TaskID)
+	if ws := fetchWorkspaceInfo(c, result.TaskID); ws != nil {
+		res["workspace"] = map[string]interface{}{"files": ws.FullPaths()}
+	}
+	return res
+}
+
+// ---------------------------------------------------------------------------
+// task (parent)
+// ---------------------------------------------------------------------------
 
 var taskCmd = &cobra.Command{
 	Use:   "task",
@@ -53,55 +95,42 @@ var taskCmd = &cobra.Command{
 	Long: `Manage tasks for multi-turn chat conversations.
 
 Create a new task:
-  agent_infini task new --query "Analyze sales data"
+  agent_infini task new "Analyze sales data"
 
-Continue a conversation in an existing task:
-  agent_infini task -t <taskId> --query "Focus on revenue"
+Continue a conversation:
+  agent_infini task ask <taskId> "Focus on revenue"
 
 Manage tasks:
   agent_infini task ls
-  agent_infini task ls --search "analysis" --page 2
   agent_infini task show <taskId>
-  agent_infini task rm <taskId>`,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		query, _ := cmd.Flags().GetString("query")
-		if query == "" {
-			return cmd.Help()
-		}
-		if globalTaskID == "" {
-			return fmt.Errorf("--task-id / -t is required when using --query")
-		}
+  agent_infini task rm <taskId>
+  agent_infini task cancel <taskId>
 
-		result, err := task.RunAskResponse(globalTaskID, query, jsonOutput)
-		if err != nil {
-			output.PrintResult(nil, err)
-			return nil
-		}
-		if !jsonOutput {
-			c, cerr := client.New()
-			res := map[string]interface{}{"lastMessage": result.LastMessage, "taskId": result.TaskID}
-			if cerr == nil {
-				res["status"] = fetchTaskStatus(c, result.TaskID)
-				res["workspace"] = map[string]interface{}{"files": fetchTaskWorkspace(c, result.TaskID)}
-			}
-			output.PrintResult(res, nil)
-		}
-		return nil
-	},
+Workspace files:
+  agent_infini task file <taskId>
+  agent_infini task preview <taskId> <fileName>
+  agent_infini task download <taskId> <fileName> -o ./output/`,
 }
 
+// ---------------------------------------------------------------------------
+// task new
+// ---------------------------------------------------------------------------
+
 var taskNewCmd = &cobra.Command{
-	Use:   "new",
+	Use:   "new [query]",
 	Short: "Create a new task",
 	Long: `Send a newTask request to the server and stream the response.
 
 Examples:
-  agent_infini task new --query "Analyze sales data"
+  agent_infini task new "Analyze sales data"
   agent_infini task new --query "Check stock levels"`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		query, _ := cmd.Flags().GetString("query")
+		if query == "" && len(args) > 0 {
+			query = strings.Join(args, " ")
+		}
 		if query == "" {
-			return fmt.Errorf("--query is required")
+			return fmt.Errorf("query is required: provide as argument or via --query")
 		}
 
 		result, err := task.RunNewTask(query, jsonOutput)
@@ -110,17 +139,50 @@ Examples:
 			return nil
 		}
 		if !jsonOutput {
-			c, cerr := client.New()
-			res := map[string]interface{}{"lastMessage": result.LastMessage, "taskId": result.TaskID}
-			if cerr == nil {
-				res["status"] = fetchTaskStatus(c, result.TaskID)
-				res["workspace"] = map[string]interface{}{"files": fetchTaskWorkspace(c, result.TaskID)}
-			}
-			output.PrintResult(res, nil)
+			output.PrintResult(enrichStreamResult(result), nil)
 		}
 		return nil
 	},
 }
+
+// ---------------------------------------------------------------------------
+// task ask
+// ---------------------------------------------------------------------------
+
+var taskAskCmd = &cobra.Command{
+	Use:   "ask <taskId> [query]",
+	Short: "Continue a conversation in an existing task",
+	Long: `Send an askResponse to continue the conversation in an existing task.
+
+Examples:
+  agent_infini task ask <taskId> "Focus on revenue"
+  agent_infini task ask <taskId> --query "Show me the trends"`,
+	Args: cobra.MinimumNArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		taskID := args[0]
+		query, _ := cmd.Flags().GetString("query")
+		if query == "" && len(args) > 1 {
+			query = strings.Join(args[1:], " ")
+		}
+		if query == "" {
+			return fmt.Errorf("query is required: provide as argument or via --query")
+		}
+
+		result, err := task.RunAskResponse(taskID, query, jsonOutput)
+		if err != nil {
+			output.PrintResult(nil, err)
+			return nil
+		}
+		if !jsonOutput {
+			output.PrintResult(enrichStreamResult(result), nil)
+		}
+		return nil
+	},
+}
+
+// ---------------------------------------------------------------------------
+// task ls
+// ---------------------------------------------------------------------------
 
 var taskListCmd = &cobra.Command{
 	Use:     "ls",
@@ -164,6 +226,10 @@ var taskListCmd = &cobra.Command{
 	},
 }
 
+// ---------------------------------------------------------------------------
+// task show
+// ---------------------------------------------------------------------------
+
 var taskShowCmd = &cobra.Command{
 	Use:   "show [taskId]",
 	Short: "Show task details",
@@ -177,35 +243,26 @@ var taskShowCmd = &cobra.Command{
 
 		taskID := args[0]
 
-		type taskInfoResult struct {
-			data json.RawMessage
-			err  error
-		}
-		type uiMsgResult struct {
+		type chanResult struct {
 			data json.RawMessage
 			err  error
 		}
 
-		type wsResult struct {
-			data json.RawMessage
-			err  error
-		}
-
-		taskInfoCh := make(chan taskInfoResult, 1)
-		uiMsgCh := make(chan uiMsgResult, 1)
-		wsCh := make(chan wsResult, 1)
+		taskInfoCh := make(chan chanResult, 1)
+		uiMsgCh := make(chan chanResult, 1)
+		wsCh := make(chan chanResult, 1)
 
 		go func() {
 			d, e := c.Get(fmt.Sprintf("/api/ai_task/getTaskInfo/%s", taskID), nil)
-			taskInfoCh <- taskInfoResult{d, e}
+			taskInfoCh <- chanResult{d, e}
 		}()
 		go func() {
 			d, e := c.Get("/api/ai_task/getUiMessageById", map[string]string{"id": taskID})
-			uiMsgCh <- uiMsgResult{d, e}
+			uiMsgCh <- chanResult{d, e}
 		}()
 		go func() {
 			d, e := c.Get(fmt.Sprintf("/api/ai_task/getTaskWorkspace/%s", taskID), nil)
-			wsCh <- wsResult{d, e}
+			wsCh <- chanResult{d, e}
 		}()
 
 		tiRes := <-taskInfoCh
@@ -240,16 +297,9 @@ var taskShowCmd = &cobra.Command{
 
 		wsRes := <-wsCh
 		if wsRes.err == nil && wsRes.data != nil {
-			var ws struct {
-				Cwd   string   `json:"cwd"`
-				Files []string `json:"files"`
-			}
+			var ws workspaceInfo
 			if err := json.Unmarshal(wsRes.data, &ws); err == nil {
-				full := make([]string, len(ws.Files))
-				for i, f := range ws.Files {
-					full[i] = ws.Cwd + "/" + f
-				}
-				parsed["workspace"] = map[string]interface{}{"files": full}
+				parsed["workspace"] = map[string]interface{}{"files": ws.FullPaths()}
 			}
 		}
 
@@ -257,6 +307,10 @@ var taskShowCmd = &cobra.Command{
 		return nil
 	},
 }
+
+// ---------------------------------------------------------------------------
+// task rm
+// ---------------------------------------------------------------------------
 
 var taskRemoveCmd = &cobra.Command{
 	Use:   "rm <taskId>[,taskId...]",
@@ -301,26 +355,25 @@ Multiple IDs can be separated by commas or spaces:
 	},
 }
 
+// ---------------------------------------------------------------------------
+// task cancel
+// ---------------------------------------------------------------------------
+
 var taskCancelCmd = &cobra.Command{
-	Use:   "cancel",
+	Use:   "cancel <taskId>",
 	Short: "Cancel a running task",
+	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		taskID := args[0]
+
 		c, err := client.New()
 		if err != nil {
 			return err
 		}
 
-		tid := globalTaskID
-		if flagTID, _ := cmd.Flags().GetString("task-id"); flagTID != "" {
-			tid = flagTID
-		}
-		if tid == "" {
-			return fmt.Errorf("--task-id is required")
-		}
-
 		msg := types.WebviewMessage{
 			Type:   "cancelTask",
-			TaskID: tid,
+			TaskID: taskID,
 		}
 
 		data, err := c.Post("/api/ai/message", msg)
@@ -328,7 +381,7 @@ var taskCancelCmd = &cobra.Command{
 			return err
 		}
 
-		output.PrintSuccess("Task %s cancelled", tid)
+		output.PrintSuccess("Task %s cancelled", taskID)
 
 		if data != nil {
 			printer := output.NewPrinter(getOutputFormat())
@@ -338,23 +391,164 @@ var taskCancelCmd = &cobra.Command{
 	},
 }
 
-func init() {
-	taskCmd.Flags().StringP("query", "q", "", "Send a message to continue the conversation (askResponse)")
+// ---------------------------------------------------------------------------
+// task file
+// ---------------------------------------------------------------------------
 
-	taskNewCmd.Flags().StringP("query", "q", "", "Initial message/query (required)")
-	_ = taskNewCmd.MarkFlagRequired("query")
+var taskFileCmd = &cobra.Command{
+	Use:   "file <taskId>",
+	Short: "List workspace files for a task",
+	Long: `Show all files in the workspace of a task.
+
+Examples:
+  agent_infini task file <taskId>`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		c, err := client.New()
+		if err != nil {
+			output.PrintResult(nil, err)
+			return nil
+		}
+
+		ws := fetchWorkspaceInfo(c, args[0])
+		if ws == nil {
+			output.PrintResult(nil, fmt.Errorf("failed to fetch workspace info"))
+			return nil
+		}
+		output.PrintResult(ws, nil)
+		return nil
+	},
+}
+
+// ---------------------------------------------------------------------------
+// task preview
+// ---------------------------------------------------------------------------
+
+var taskPreviewCmd = &cobra.Command{
+	Use:   "preview <taskId> <fileName>",
+	Short: "Preview a workspace file content",
+	Long: `Display the content of a workspace file to stdout.
+
+Examples:
+  agent_infini task preview <taskId> test_file.txt`,
+	Args: cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		taskID := args[0]
+		fileName := args[1]
+
+		c, err := client.New()
+		if err != nil {
+			output.PrintResult(nil, err)
+			return nil
+		}
+
+		data, err := c.Post("/api/ai_task/previewFile", map[string]string{
+			"taskId":   taskID,
+			"fileName": fileName,
+		})
+		if err != nil {
+			output.PrintResult(nil, err)
+			return nil
+		}
+
+		var resp filePreviewResponse
+		if err := json.Unmarshal(data, &resp); err != nil {
+			output.PrintResult(nil, fmt.Errorf("failed to parse response: %w", err))
+			return nil
+		}
+		if resp.Content == nil {
+			output.PrintResult(nil, fmt.Errorf("file not found: %s", fileName))
+			return nil
+		}
+		fmt.Print(*resp.Content)
+		return nil
+	},
+}
+
+// ---------------------------------------------------------------------------
+// task download
+// ---------------------------------------------------------------------------
+
+var taskDownloadCmd = &cobra.Command{
+	Use:   "download <taskId> <fileName>",
+	Short: "Download a workspace file to local disk",
+	Long: `Download a file from the task workspace to the local disk.
+
+Examples:
+  agent_infini task download <taskId> report.csv
+  agent_infini task download <taskId> report.csv -o ./output/`,
+	Args: cobra.ExactArgs(2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		taskID := args[0]
+		fileName := args[1]
+		outDir, _ := cmd.Flags().GetString("output")
+
+		c, err := client.New()
+		if err != nil {
+			output.PrintResult(nil, err)
+			return nil
+		}
+
+		endpoint := fmt.Sprintf("/api/tools/storage/downloadTaskFile/%s?path=%s",
+			taskID, url.QueryEscape(fileName))
+		resp, err := c.RawRequest("GET", endpoint, nil)
+		if err != nil {
+			output.PrintResult(nil, err)
+			return nil
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			body, _ := io.ReadAll(resp.Body)
+			output.PrintResult(nil, fmt.Errorf("HTTP %d: %s", resp.StatusCode, string(body)))
+			return nil
+		}
+
+		dest := outDir
+		if info, err := os.Stat(outDir); err == nil && info.IsDir() {
+			dest = filepath.Join(outDir, filepath.Base(fileName))
+		}
+		f, err := os.Create(dest)
+		if err != nil {
+			output.PrintResult(nil, fmt.Errorf("failed to create file %s: %w", dest, err))
+			return nil
+		}
+		defer f.Close()
+
+		n, err := io.Copy(f, resp.Body)
+		if err != nil {
+			output.PrintResult(nil, fmt.Errorf("failed to write file: %w", err))
+			return nil
+		}
+
+		output.PrintResult(map[string]interface{}{"file": dest, "size": n}, nil)
+		return nil
+	},
+}
+
+// ---------------------------------------------------------------------------
+// init
+// ---------------------------------------------------------------------------
+
+func init() {
+	taskNewCmd.Flags().StringP("query", "q", "", "Initial message/query")
+	taskAskCmd.Flags().StringP("query", "q", "", "Message to continue the conversation")
 
 	taskListCmd.Flags().Int("page", 1, "Page number")
 	taskListCmd.Flags().Int("page-size", 10, "Number of items per page")
 	taskListCmd.Flags().String("search", "", "Search tasks by name")
 
-	taskCancelCmd.Flags().String("task-id", "", "Task ID to cancel")
+	taskDownloadCmd.Flags().StringP("output", "o", ".", "Output file path or directory")
 
 	taskCmd.AddCommand(taskNewCmd)
+	taskCmd.AddCommand(taskAskCmd)
 	taskCmd.AddCommand(taskListCmd)
 	taskCmd.AddCommand(taskShowCmd)
 	taskCmd.AddCommand(taskRemoveCmd)
 	taskCmd.AddCommand(taskCancelCmd)
+	taskCmd.AddCommand(taskFileCmd)
+	taskCmd.AddCommand(taskPreviewCmd)
+	taskCmd.AddCommand(taskDownloadCmd)
 
 	rootCmd.AddCommand(taskCmd)
 }
