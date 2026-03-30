@@ -11,12 +11,13 @@ import (
 )
 
 type SessionData struct {
-	Name      string    `json:"name"`
-	TaskID    string    `json:"taskId"`
-	ConnID    string    `json:"connId,omitempty"`
-	CWD       string    `json:"cwd"`
-	CreatedAt time.Time `json:"createdAt"`
-	UpdatedAt time.Time `json:"updatedAt"`
+	Name          string    `json:"name"`
+	UserID        string    `json:"userId,omitempty"`
+	TaskID        string    `json:"taskId"`
+	ConnID        string    `json:"connId,omitempty"`
+	WorkspacePath string    `json:"workspacePath"`
+	CreatedAt     time.Time `json:"createdAt"`
+	UpdatedAt     time.Time `json:"updatedAt"`
 }
 
 func sessionsDir() (string, error) {
@@ -60,7 +61,7 @@ func Load(name string) (*SessionData, error) {
 	return &sess, nil
 }
 
-func Save(name, taskID, connID, cwd string) error {
+func Save(name, userID, taskID, connID, workspacePath string) error {
 	fp, err := sessionFilePath(name)
 	if err != nil {
 		return err
@@ -68,11 +69,12 @@ func Save(name, taskID, connID, cwd string) error {
 
 	now := time.Now()
 	sess := &SessionData{
-		Name:      name,
-		TaskID:    taskID,
-		ConnID:    connID,
-		CWD:       cwd,
-		UpdatedAt: now,
+		Name:          name,
+		UserID:        userID,
+		TaskID:        taskID,
+		ConnID:        connID,
+		WorkspacePath: workspacePath,
+		UpdatedAt:     now,
 	}
 
 	existing, loadErr := Load(name)

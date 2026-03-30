@@ -17,13 +17,18 @@ const (
 	KeyAPIKey         = "api-key"
 	KeyOutput         = "default-output"
 	KeyPreferLanguage = "prefer-language"
+	KeyConsole        = "console"
+	KeyUserID         = "user-id"
 )
+
+const DefaultConsoleURL = "https://api.infinisynapse.cn/api"
 
 var SupportedLanguages = []string{"en", "zh_CN", "ar", "ja", "ko", "ru"}
 
 var defaults = map[string]string{
 	KeyOutput:         "json",
 	KeyPreferLanguage: "zh_CN",
+	KeyConsole:        DefaultConsoleURL,
 }
 
 // configFile mirrors the WinClaw config.key / config.json structure.
@@ -157,6 +162,8 @@ func GetServer() string         { return Get(KeyServer) }
 func GetToken() string          { return Get(KeyAPIKey) }
 func GetDefaultOutput() string  { return Get(KeyOutput) }
 func GetPreferLanguage() string { return Get(KeyPreferLanguage) }
+func GetConsole() string        { return Get(KeyConsole) }
+func GetUserID() string         { return Get(KeyUserID) }
 
 // IsInitialized reports whether a config file with a non-empty API key exists.
 func IsInitialized() bool {

@@ -3,9 +3,11 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
+	"github.com/chaozwn/infinisynapse-cli/internal/config"
 	"github.com/chaozwn/infinisynapse-cli/internal/output"
 	"github.com/chaozwn/infinisynapse-cli/internal/session"
 	"github.com/spf13/cobra"
@@ -36,18 +38,18 @@ var sessionListCmd = &cobra.Command{
 		}
 
 		printer := output.NewPrinter(getOutputFormat())
-		headers := []string{"Name", "Task ID", "CWD", "Updated At"}
+		headers := []string{"Name", "Task ID", "Workspace Path", "Updated At"}
 		rows := make([][]string, 0, len(sessions))
 		for _, s := range sessions {
 			taskID := s.TaskID
 			if len(taskID) > 16 {
 				taskID = taskID[:16] + "..."
 			}
-			cwd := s.CWD
-			if len(cwd) > 40 {
-				cwd = "..." + cwd[len(cwd)-37:]
+			wp := s.WorkspacePath
+			if len(wp) > 40 {
+				wp = "..." + wp[len(wp)-37:]
 			}
-			rows = append(rows, []string{s.Name, taskID, cwd, s.UpdatedAt.Format("2006-01-02 15:04:05")})
+			rows = append(rows, []string{s.Name, taskID, wp, s.UpdatedAt.Format("2006-01-02 15:04:05")})
 		}
 		printer.PrintTable(headers, rows)
 		return nil
@@ -95,8 +97,9 @@ Subsequent 'chat' calls without --session will use this session automatically.`,
 
 		if !session.Exists(name) {
 			taskID := strconv.FormatInt(time.Now().UnixMilli(), 10)
-			cwd, _ := os.Getwd()
-			if err := session.Save(name, taskID, "", cwd); err != nil {
+			userID := config.GetUserID()
+			wsPath := taskWorkspacePath(userID, taskID)
+			if err := session.Save(name, userID, taskID, "", wsPath); err != nil {
 				return fmt.Errorf("failed to create session '%s': %w", name, err)
 			}
 			output.PrintSuccess("Session '%s' created (taskId: %s)", name, taskID)
@@ -171,6 +174,22 @@ func saveSession(sessionName, taskID, connID string) {
 	if name == "" || taskID == "" {
 		return
 	}
-	cwd, _ := os.Getwd()
-	_ = session.Save(name, taskID, connID, cwd)
+	userID := config.GetUserID()
+	wsPath := taskWorkspacePath(userID, taskID)
+	_ = session.Save(name, userID, taskID, connID, wsPath)
+}
+
+// taskWorkspacePath returns ~/.infiniSynapse/tasks/${userId}/${taskId}.
+// Falls back to the current working directory if userId is not configured.
+func taskWorkspacePath(userID, taskID string) string {
+	if userID == "" {
+		cwd, _ := os.Getwd()
+		return cwd
+	}
+	home, err := os.UserHomeDir()
+	if err != nil {
+		cwd, _ := os.Getwd()
+		return cwd
+	}
+	return filepath.Join(home, ".infiniSynapse", "tasks", userID, taskID)
 }

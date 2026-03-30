@@ -52,7 +52,7 @@ Key Features:
 
 Quick Start:
   agent_infini session current                  # View the current active session
-  agent_infini session use main                 # Create & activate a session named "main"
+  agent_infini session use "data-analysis"      # Create & activate a session named "data-analysis"
   agent_infini chat "Hello, analyze my data"    # Chat using the current session
 
 Use 'agent_infini --skill' or 'agent_infini skill' for detailed command specifications.
