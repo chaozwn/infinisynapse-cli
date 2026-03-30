@@ -22,3 +22,24 @@ type PagerParams struct {
 	Field    string `json:"field,omitempty"`
 	Order    string `json:"order,omitempty"`
 }
+
+type TaskListItem struct {
+	ID        string `json:"id"`
+	UserID    string `json:"user_id"`
+	TaskName  string `json:"task_name"`
+	Status    string `json:"task_status"`
+	UpdatedAt string `json:"updatedAt"`
+}
+
+type TaskListResponse struct {
+	Items []TaskListItem `json:"items"`
+	Meta  PagerMeta      `json:"meta"`
+}
+
+type PagerMeta struct {
+	ItemCount    int `json:"itemCount"`
+	TotalItems   int `json:"totalItems"`
+	ItemsPerPage int `json:"itemsPerPage"`
+	TotalPages   int `json:"totalPages"`
+	CurrentPage  int `json:"currentPage"`
+}

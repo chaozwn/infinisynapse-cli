@@ -10,9 +10,9 @@ import (
 )
 
 var (
-	sessionName string
-	jsonOutput  bool
-	showSkill   bool
+	globalTaskID string
+	jsonOutput   bool
+	showSkill    bool
 )
 
 func getOutputFormat() output.Format {
@@ -47,13 +47,13 @@ var rootCmd = &cobra.Command{
 from the terminal, designed for both human users and AI agent workflows.
 
 Key Features:
-  - Chat with AI with session-based multi-turn support
+  - Chat with AI with task-based multi-turn support
   - Unified JSON output for pipeline composability
 
 Quick Start:
-  agent_infini session new --name "analysis" --query "Analyze my data"
-  agent_infini session -s "analysis" -q "Show trends"
-  agent_infini session ls
+  agent_infini task new --query "Analyze my data"
+  agent_infini task -t <taskId> -q "Show trends"
+  agent_infini task ls
 
 Use 'agent_infini --skill' or 'agent_infini skill' for detailed command specifications.
 
@@ -77,8 +77,8 @@ For more information about a specific command, use:
 
 func init() {
 	rootCmd.Version = Version
-	rootCmd.PersistentFlags().StringVarP(&sessionName, "session", "s", "",
-		"Session alias name for automatic resume")
+	rootCmd.PersistentFlags().StringVarP(&globalTaskID, "task-id", "t", "",
+		"Task ID for continuing a conversation")
 	rootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false,
 		"Output in JSON format: {success, data, error}")
 	rootCmd.Flags().BoolVar(&showSkill, "skill", false,

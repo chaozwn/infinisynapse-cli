@@ -25,57 +25,59 @@ First-time Setup:
     api-key: "your_api_key"
   EOF
 
-Session Workflow (multi-turn chat):
-  1. Create a session and start a new task:
-     agent_infini session new --name "analysis" --query "Analyze my data"
+Task Workflow (multi-turn chat):
+  1. Create a task:
+     agent_infini task new --query "Analyze my data"
   2. Continue the conversation (respond to server ask):
-     agent_infini session -s "analysis" --query "Show me the trends"
-  3. Manage sessions:
-     agent_infini session ls              # List all sessions
-     agent_infini session show analysis   # View session details
-     agent_infini session rm analysis     # Delete a session
+     agent_infini task -t <taskId> --query "Show me the trends"
+  3. Manage tasks:
+     agent_infini task ls                        # List tasks (paginated)
+     agent_infini task ls --search "analysis"    # Search by name
+     agent_infini task show <taskId>             # View task details
+     agent_infini task rm <taskId>               # Delete a task
 
 ================================================================================
 Available Commands
 ================================================================================
 
   version                                          Print version, commit, build date, Go runtime
-  session new --name <name> --query <message>      Create session and start a new task (newTask)
-  session -s <name> --query <message>              Continue conversation in session (askResponse)
-  session ls                                       List all sessions with status
-  session show <name>                              Show session details
-  session rm <name>                                Delete a session
-  session state -s <name>                          Get AI state for a session
-  session cancel -s <name>                         Cancel a running task in a session
+  task new --query <message>                       Create a new task (newTask)
+  task -t <taskId> --query <message>               Continue conversation in task (askResponse)
+  task ls [--page N] [--page-size N] [--search Q]  List tasks with pagination and search
+  task show <taskId>                               Show task details
+  task rm <taskId> [taskId2...]                    Delete one or more tasks
+  task state [--task-id <taskId>]                  Get AI state for a task
+  task cancel --task-id <taskId>                   Cancel a running task
 
 ================================================================================
 Global Flags
 ================================================================================
 
-  --session, -s <name>   Session alias for automatic resume across chat calls
-  --json                 Force JSON output: {"success": true, "data": ...}
-  --skill                Show this detailed specification
-  --version, -v          Print version string
-  --help, -h             Show help for any command
+  --task-id, -t <id>   Task ID for continuing a conversation
+  --json               Force JSON output: {"success": true, "data": ...}
+  --skill              Show this detailed specification
+  --version, -v        Print version string
+  --help, -h           Show help for any command
 
 ================================================================================
 Common Scenarios
 ================================================================================
 
-1. Start a new analysis session:
-   agent_infini session new --name "analysis" --query "What tables are in my database?"
+1. Start a new analysis task:
+   agent_infini task new --query "What tables are in my database?"
 
 2. Multi-turn analysis:
-   agent_infini session new --name "analysis" --query "Analyze the users table schema"
-   agent_infini session -s "analysis" -q "Now show me the top 10 users by activity"
-   agent_infini session -s "analysis" -q "Generate a summary report"
+   agent_infini task new --query "Analyze the users table schema"
+   agent_infini task -t <taskId> -q "Now show me the top 10 users by activity"
+   agent_infini task -t <taskId> -q "Generate a summary report"
 
-3. Check session state:
-   agent_infini session ls
-   agent_infini session show "analysis"
+3. Browse tasks:
+   agent_infini task ls
+   agent_infini task ls --search "analysis" --page 2 --page-size 20
+   agent_infini task show <taskId>
 
 4. Cancel a running task:
-   agent_infini session cancel -s "analysis"
+   agent_infini task cancel --task-id <taskId>
 
 ================================================================================
 Output Format
@@ -92,15 +94,13 @@ Table mode (default-output: "table" in config.key):
 Error Handling
 ================================================================================
 
-  - Token expired:     Update api-key in ~/.agent_infini/config.key
+  - Token expired:      Update api-key in ~/.agent_infini/config.key
   - Server unreachable: Check --server URL and network connectivity
-  - Session not found:  A new conversation will be started automatically
+  - Task not found:     Use 'task ls' to find valid task IDs
 
 ================================================================================
 Configuration & Credential Chain
 ================================================================================
-
-Session files: ~/.agent_infini/sessions/<name>.json
 
 Configuration is loaded from the first file found in this order
 (per execute_external_tool_resolver.py):
