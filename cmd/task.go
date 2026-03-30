@@ -14,6 +14,20 @@ import (
 	"github.com/spf13/cobra"
 )
 
+func fetchTaskStatus(c *client.Client, taskID string) string {
+	data, err := c.Get(fmt.Sprintf("/api/ai_task/getTaskInfo/%s", taskID), nil)
+	if err != nil {
+		return ""
+	}
+	var info struct {
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(data, &info); err != nil {
+		return ""
+	}
+	return info.Status
+}
+
 func fetchTaskWorkspace(c *client.Client, taskID string) []string {
 	data, err := c.Get(fmt.Sprintf("/api/ai_task/getTaskWorkspace/%s", taskID), nil)
 	if err != nil {
@@ -65,10 +79,10 @@ Manage tasks:
 		}
 		if !jsonOutput {
 			c, cerr := client.New()
-			res := map[string]interface{}{"lastMessage": result.LastMessage, "taskId": result.TaskID, "status": result.Status}
+			res := map[string]interface{}{"lastMessage": result.LastMessage, "taskId": result.TaskID}
 			if cerr == nil {
-				files := fetchTaskWorkspace(c, result.TaskID)
-				res["workspace"] = map[string]interface{}{"files": files}
+				res["status"] = fetchTaskStatus(c, result.TaskID)
+				res["workspace"] = map[string]interface{}{"files": fetchTaskWorkspace(c, result.TaskID)}
 			}
 			output.PrintResult(res, nil)
 		}
@@ -97,10 +111,10 @@ Examples:
 		}
 		if !jsonOutput {
 			c, cerr := client.New()
-			res := map[string]interface{}{"lastMessage": result.LastMessage, "taskId": result.TaskID, "status": result.Status}
+			res := map[string]interface{}{"lastMessage": result.LastMessage, "taskId": result.TaskID}
 			if cerr == nil {
-				files := fetchTaskWorkspace(c, result.TaskID)
-				res["workspace"] = map[string]interface{}{"files": files}
+				res["status"] = fetchTaskStatus(c, result.TaskID)
+				res["workspace"] = map[string]interface{}{"files": fetchTaskWorkspace(c, result.TaskID)}
 			}
 			output.PrintResult(res, nil)
 		}

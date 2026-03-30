@@ -18,7 +18,6 @@ import (
 type StreamResult struct {
 	TaskID      string
 	ConnID      string
-	Status      string
 	LastAskType string
 	LastMessage *StreamEvent
 }
@@ -77,7 +76,6 @@ func runStreamingChat(connID string, msg types.WebviewMessage, jsonMode bool) (*
 	sseReady := make(chan struct{})
 
 	var capturedTaskID string
-	var sessionStatus string
 	var lastAskType string
 	var lastMessage *StreamEvent
 
@@ -113,7 +111,6 @@ func runStreamingChat(connID string, msg types.WebviewMessage, jsonMode bool) (*
 				m := payload.Message
 
 				if m.Type == "ask" && !m.Partial {
-					sessionStatus = "asking"
 					lastAskType = m.Ask
 					if jsonMode {
 						emitJSON(StreamEvent{TaskID: capturedTaskID, Ts: m.Ts, Type: m.Type, Ask: m.Ask, Text: m.Text, Partial: m.Partial})
@@ -151,12 +148,10 @@ func runStreamingChat(connID string, msg types.WebviewMessage, jsonMode bool) (*
 				}
 
 				if m.Type == "ask" && !m.Partial {
-					sessionStatus = "asking"
 					lastAskType = m.Ask
 					return false
 				}
 				if m.Say == "completion_result" {
-					sessionStatus = "completed"
 					return false
 				}
 
@@ -232,7 +227,6 @@ func runStreamingChat(connID string, msg types.WebviewMessage, jsonMode bool) (*
 	return &StreamResult{
 		TaskID:      capturedTaskID,
 		ConnID:      connID,
-		Status:      sessionStatus,
 		LastAskType: lastAskType,
 		LastMessage: lastMessage,
 	}, nil
