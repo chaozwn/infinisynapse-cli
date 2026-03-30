@@ -16,24 +16,25 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var aiCmd = &cobra.Command{
-	Use:   "ai",
-	Short: "AI conversation and configuration",
-}
-
-var aiChatCmd = &cobra.Command{
+var chatCmd = &cobra.Command{
 	Use:   "chat [message]",
-	Short: "Start a new AI conversation or continue an existing one",
+	Short: "Chat with AI (streaming)",
 	Long: `Send a message to the AI and receive streaming responses.
-Use --task-id to continue an existing conversation.`,
+
+Use --session to maintain context across multiple calls:
+  isc chat "Analyze my data" --session main
+  isc chat "Show trends" --session main
+
+Use --task-id to continue a specific conversation (overrides --session).`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := client.NewWithOverrides(flagServer, flagToken)
+		c, err := client.NewWithOverrides("", "")
 		if err != nil {
 			return err
 		}
 
-		taskID, _ := cmd.Flags().GetString("task-id")
+		explicitTaskID, _ := cmd.Flags().GetString("task-id")
+		taskID := resolveTaskIDFromSession(sessionName, explicitTaskID)
 		connID := uuid.New().String()
 
 		msgType := "newTask"
@@ -65,6 +66,8 @@ Use --task-id to continue an existing conversation.`,
 		sseDone := make(chan error, 1)
 		sseReady := make(chan struct{})
 		textLenByTs := make(map[int64]int)
+
+		var capturedTaskID string
 
 		skipSayTypes := map[string]bool{
 			"task":             true,
@@ -101,11 +104,16 @@ Use --task-id to continue an existing conversation.`,
 					} `json:"message"`
 				}
 
-			switch event.Event {
+				switch event.Event {
 				case "message.partial":
 					if err := json.Unmarshal([]byte(event.Data), &payload); err != nil {
 						return true
 					}
+
+					if payload.TaskID != "" {
+						capturedTaskID = payload.TaskID
+					}
+
 					msg := payload.Message
 
 					if msg.Type == "ask" && !msg.Partial {
@@ -135,6 +143,11 @@ Use --task-id to continue an existing conversation.`,
 					if err := json.Unmarshal([]byte(event.Data), &payload); err != nil {
 						return true
 					}
+
+					if payload.TaskID != "" {
+						capturedTaskID = payload.TaskID
+					}
+
 					msg := payload.Message
 
 					if msg.Type == "say" && printableSayTypes[msg.Say] {
@@ -201,20 +214,30 @@ Use --task-id to continue an existing conversation.`,
 		}
 
 		fmt.Println()
+
+		if capturedTaskID == "" && taskID != "" {
+			capturedTaskID = taskID
+		}
+		saveSession(sessionName, capturedTaskID, connID)
+
 		return nil
 	},
 }
 
-var aiStateCmd = &cobra.Command{
+var chatStateCmd = &cobra.Command{
 	Use:   "state",
 	Short: "Get AI state",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := client.NewWithOverrides(flagServer, flagToken)
+		c, err := client.NewWithOverrides("", "")
 		if err != nil {
 			return err
 		}
 
 		taskID, _ := cmd.Flags().GetString("task-id")
+		if taskID == "" {
+			taskID = resolveTaskIDFromSession(sessionName, "")
+		}
+
 		params := map[string]string{}
 		if taskID != "" {
 			params["taskId"] = taskID
@@ -230,16 +253,16 @@ var aiStateCmd = &cobra.Command{
 	},
 }
 
-var aiConfigCmd = &cobra.Command{
+var chatConfigCmd = &cobra.Command{
 	Use:   "config",
 	Short: "Get or update API configuration",
 }
 
-var aiConfigGetCmd = &cobra.Command{
+var chatConfigGetCmd = &cobra.Command{
 	Use:   "get",
 	Short: "Get current API configuration",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := client.NewWithOverrides(flagServer, flagToken)
+		c, err := client.NewWithOverrides("", "")
 		if err != nil {
 			return err
 		}
@@ -254,11 +277,11 @@ var aiConfigGetCmd = &cobra.Command{
 	},
 }
 
-var aiConfigSetCmd = &cobra.Command{
+var chatConfigSetCmd = &cobra.Command{
 	Use:   "set",
 	Short: "Update API configuration",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := client.NewWithOverrides(flagServer, flagToken)
+		c, err := client.NewWithOverrides("", "")
 		if err != nil {
 			return err
 		}
@@ -296,11 +319,11 @@ var aiConfigSetCmd = &cobra.Command{
 	},
 }
 
-var aiModelsCmd = &cobra.Command{
+var chatModelsCmd = &cobra.Command{
 	Use:   "models",
 	Short: "List available AI models",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := client.NewWithOverrides(flagServer, flagToken)
+		c, err := client.NewWithOverrides("", "")
 		if err != nil {
 			return err
 		}
@@ -315,18 +338,21 @@ var aiModelsCmd = &cobra.Command{
 	},
 }
 
-var aiCancelCmd = &cobra.Command{
+var chatCancelCmd = &cobra.Command{
 	Use:   "cancel",
 	Short: "Cancel a running task",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := client.NewWithOverrides(flagServer, flagToken)
+		c, err := client.NewWithOverrides("", "")
 		if err != nil {
 			return err
 		}
 
 		taskID, _ := cmd.Flags().GetString("task-id")
 		if taskID == "" {
-			return fmt.Errorf("--task-id is required")
+			taskID = resolveTaskIDFromSession(sessionName, "")
+		}
+		if taskID == "" {
+			return fmt.Errorf("--task-id or --session is required")
 		}
 
 		msg := types.WebviewMessage{
@@ -350,25 +376,24 @@ var aiCancelCmd = &cobra.Command{
 }
 
 func init() {
-	aiChatCmd.Flags().String("task-id", "", "Continue conversation in existing task")
+	chatCmd.Flags().String("task-id", "", "Continue conversation in existing task (overrides --session)")
 
-	aiStateCmd.Flags().String("task-id", "", "Get state for specific task")
+	chatStateCmd.Flags().String("task-id", "", "Get state for specific task")
 
-	aiConfigSetCmd.Flags().String("provider", "", "API provider (openai, anthropic, deepseek, qwen, infinisynapse)")
-	aiConfigSetCmd.Flags().String("model", "", "Model ID")
-	aiConfigSetCmd.Flags().String("api-key", "", "API key")
-	aiConfigSetCmd.Flags().String("base-url", "", "API base URL")
+	chatConfigSetCmd.Flags().String("provider", "", "API provider (openai, anthropic, deepseek, qwen, infinisynapse)")
+	chatConfigSetCmd.Flags().String("model", "", "Model ID")
+	chatConfigSetCmd.Flags().String("api-key", "", "API key")
+	chatConfigSetCmd.Flags().String("base-url", "", "API base URL")
 
-	aiCancelCmd.Flags().String("task-id", "", "Task ID to cancel (required)")
+	chatCancelCmd.Flags().String("task-id", "", "Task ID to cancel")
 
-	aiConfigCmd.AddCommand(aiConfigGetCmd)
-	aiConfigCmd.AddCommand(aiConfigSetCmd)
+	chatConfigCmd.AddCommand(chatConfigGetCmd)
+	chatConfigCmd.AddCommand(chatConfigSetCmd)
 
-	aiCmd.AddCommand(aiChatCmd)
-	aiCmd.AddCommand(aiStateCmd)
-	aiCmd.AddCommand(aiConfigCmd)
-	aiCmd.AddCommand(aiModelsCmd)
-	aiCmd.AddCommand(aiCancelCmd)
+	chatCmd.AddCommand(chatStateCmd)
+	chatCmd.AddCommand(chatConfigCmd)
+	chatCmd.AddCommand(chatModelsCmd)
+	chatCmd.AddCommand(chatCancelCmd)
 
-	rootCmd.AddCommand(aiCmd)
+	rootCmd.AddCommand(chatCmd)
 }

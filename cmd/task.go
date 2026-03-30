@@ -19,7 +19,7 @@ var taskListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List tasks with pagination",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := client.NewWithOverrides(flagServer, flagToken)
+		c, err := client.NewWithOverrides("", "")
 		if err != nil {
 			return err
 		}
@@ -83,7 +83,7 @@ var taskShowCmd = &cobra.Command{
 	Short: "Show task details",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := client.NewWithOverrides(flagServer, flagToken)
+		c, err := client.NewWithOverrides("", "")
 		if err != nil {
 			return err
 		}
@@ -103,7 +103,7 @@ var taskInfoCmd = &cobra.Command{
 	Short: "Get task metadata",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := client.NewWithOverrides(flagServer, flagToken)
+		c, err := client.NewWithOverrides("", "")
 		if err != nil {
 			return err
 		}
@@ -123,7 +123,7 @@ var taskDeleteCmd = &cobra.Command{
 	Short: "Delete tasks by IDs",
 	Args:  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := client.NewWithOverrides(flagServer, flagToken)
+		c, err := client.NewWithOverrides("", "")
 		if err != nil {
 			return err
 		}
@@ -147,7 +147,7 @@ var taskCancelCmd = &cobra.Command{
 	Use:   "cancel",
 	Short: "Cancel a running task",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := client.NewWithOverrides(flagServer, flagToken)
+		c, err := client.NewWithOverrides("", "")
 		if err != nil {
 			return err
 		}
@@ -182,7 +182,7 @@ var taskCategoryListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List all task categories",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := client.NewWithOverrides(flagServer, flagToken)
+		c, err := client.NewWithOverrides("", "")
 		if err != nil {
 			return err
 		}
@@ -222,7 +222,7 @@ var taskCategoryAddCmd = &cobra.Command{
 	Short: "Add a task category",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := client.NewWithOverrides(flagServer, flagToken)
+		c, err := client.NewWithOverrides("", "")
 		if err != nil {
 			return err
 		}
@@ -247,7 +247,7 @@ var taskCategoryDeleteCmd = &cobra.Command{
 	Short: "Delete task categories",
 	Args:  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := client.NewWithOverrides(flagServer, flagToken)
+		c, err := client.NewWithOverrides("", "")
 		if err != nil {
 			return err
 		}

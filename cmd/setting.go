@@ -19,7 +19,7 @@ var settingGetCmd = &cobra.Command{
 	Short: "Get a setting value by key",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := client.NewWithOverrides(flagServer, flagToken)
+		c, err := client.NewWithOverrides("", "")
 		if err != nil {
 			return err
 		}
@@ -39,7 +39,7 @@ var settingSetCmd = &cobra.Command{
 	Short: "Set a setting value",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := client.NewWithOverrides(flagServer, flagToken)
+		c, err := client.NewWithOverrides("", "")
 		if err != nil {
 			return err
 		}
@@ -72,7 +72,7 @@ var settingLanguageGetCmd = &cobra.Command{
 	Use:   "get",
 	Short: "Get preferred language",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := client.NewWithOverrides(flagServer, flagToken)
+		c, err := client.NewWithOverrides("", "")
 		if err != nil {
 			return err
 		}
@@ -92,7 +92,7 @@ var settingLanguageSetCmd = &cobra.Command{
 	Short: "Set preferred language (e.g. zh-CN, en-US)",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := client.NewWithOverrides(flagServer, flagToken)
+		c, err := client.NewWithOverrides("", "")
 		if err != nil {
 			return err
 		}
@@ -120,7 +120,7 @@ var settingEngineConfigGetCmd = &cobra.Command{
 	Use:   "get",
 	Short: "Get engine configuration",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := client.NewWithOverrides(flagServer, flagToken)
+		c, err := client.NewWithOverrides("", "")
 		if err != nil {
 			return err
 		}
@@ -140,7 +140,7 @@ var settingEngineConfigSetCmd = &cobra.Command{
 	Short: "Update engine configuration",
 	Args:  cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := client.NewWithOverrides(flagServer, flagToken)
+		c, err := client.NewWithOverrides("", "")
 		if err != nil {
 			return err
 		}
@@ -170,7 +170,7 @@ var settingModelInfoCmd = &cobra.Command{
 	Short: "Get model information",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := client.NewWithOverrides(flagServer, flagToken)
+		c, err := client.NewWithOverrides("", "")
 		if err != nil {
 			return err
 		}

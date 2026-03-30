@@ -16,6 +16,12 @@ const (
 	FormatTable Format = "table"
 )
 
+type Result struct {
+	Success bool        `json:"success"`
+	Data    interface{} `json:"data,omitempty"`
+	Error   string      `json:"error,omitempty"`
+}
+
 type Printer struct {
 	format Format
 	writer io.Writer
@@ -78,6 +84,17 @@ func (p *Printer) Print(data interface{}, headers []string, toRows func(interfac
 		return nil
 	}
 	return p.PrintJSON(data)
+}
+
+func PrintResult(data interface{}, err error) {
+	var result Result
+	if err != nil {
+		result = Result{Success: false, Error: err.Error()}
+	} else {
+		result = Result{Success: true, Data: data}
+	}
+	out, _ := json.MarshalIndent(result, "", "  ")
+	fmt.Fprintln(os.Stdout, string(out))
 }
 
 func PrintError(format string, args ...interface{}) {

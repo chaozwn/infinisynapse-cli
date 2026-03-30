@@ -19,7 +19,7 @@ var dbListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "List databases",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := client.NewWithOverrides(flagServer, flagToken)
+		c, err := client.NewWithOverrides("", "")
 		if err != nil {
 			return err
 		}
@@ -88,7 +88,7 @@ var dbGetCmd = &cobra.Command{
 	Short: "Get database by ID",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := client.NewWithOverrides(flagServer, flagToken)
+		c, err := client.NewWithOverrides("", "")
 		if err != nil {
 			return err
 		}
@@ -107,7 +107,7 @@ var dbAddCmd = &cobra.Command{
 	Use:   "add",
 	Short: "Add a new database",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := client.NewWithOverrides(flagServer, flagToken)
+		c, err := client.NewWithOverrides("", "")
 		if err != nil {
 			return err
 		}
@@ -147,7 +147,7 @@ var dbUpdateCmd = &cobra.Command{
 	Use:   "update",
 	Short: "Update a database",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := client.NewWithOverrides(flagServer, flagToken)
+		c, err := client.NewWithOverrides("", "")
 		if err != nil {
 			return err
 		}
@@ -191,7 +191,7 @@ var dbDeleteCmd = &cobra.Command{
 	Short: "Delete databases",
 	Args:  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := client.NewWithOverrides(flagServer, flagToken)
+		c, err := client.NewWithOverrides("", "")
 		if err != nil {
 			return err
 		}
@@ -215,7 +215,7 @@ var dbTestCmd = &cobra.Command{
 	Use:   "test",
 	Short: "Test database connection",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		c, err := client.NewWithOverrides(flagServer, flagToken)
+		c, err := client.NewWithOverrides("", "")
 		if err != nil {
 			return err
 		}
@@ -265,7 +265,7 @@ var dbDisableCmd = &cobra.Command{
 }
 
 func toggleDatabase(ids []string, enabled int) error {
-	c, err := client.NewWithOverrides(flagServer, flagToken)
+	c, err := client.NewWithOverrides("", "")
 	if err != nil {
 		return err
 	}

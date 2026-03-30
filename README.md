@@ -21,17 +21,14 @@ Windows 下会生成 `isc.exe`，Linux/macOS 下生成 `isc`。
 ## 快速开始
 
 ```bash
-# 1. 配置服务器地址和认证 Token
-isc auth login --server http://localhost:7001 --token YOUR_TOKEN
+# 1. 初始化配置（服务器与 API key，写入 ~/.isc.yaml）
+isc init
 
-# 2. 检查连接状态
-isc auth status
+# 2. 发起一次 AI 对话
+isc chat "帮我查询本月销售数据"
 
-# 3. 发起一次 AI 对话
-isc ai chat "帮我查询本月销售数据"
-
-# 4. 查看任务列表
-isc task list --table
+# 3. 查看任务列表
+isc task list
 ```
 
 ## 项目结构
@@ -42,9 +39,9 @@ infinisynapse-cli/
 ├── go.mod / go.sum                # Go 模块依赖
 ├── .gitignore
 ├── cmd/
-│   ├── root.go                    # 根命令 + 全局 flags
-│   ├── auth.go                    # 认证管理
-│   ├── ai.go                      # AI 对话与配置
+│   ├── root.go                    # 根命令
+│   ├── init.go                    # 初始化本地配置
+│   ├── chat.go                    # 聊天与 AI 配置
 │   ├── task.go                    # 任务管理
 │   ├── database.go                # 数据源管理
 │   └── setting.go                 # 系统设置
@@ -64,58 +61,36 @@ infinisynapse-cli/
         └── setting.go             # Setting 相关类型
 ```
 
-## 全局参数
-
-所有命令均支持以下全局参数：
-
-| 参数 | 缩写 | 说明 |
-|------|------|------|
-| `--server` | `-s` | API 服务器地址（覆盖配置文件） |
-| `--token` | `-t` | Bearer Token（覆盖配置文件） |
-| `--table` | | 以表格形式输出（默认 JSON） |
-
 ## 命令参考
 
-### 认证管理 `isc auth`
+### 初始化 `isc init`
 
-```bash
-# 配置服务器和 Token（保存到 ~/.isc.yaml）
-isc auth login --server http://localhost:7001 --token YOUR_TOKEN
+交互式写入 `~/.isc.yaml`（服务器地址、API key）。默认服务器为 `http://app.infinisynapse.cn`。也可用 `--server`、`--api-key` 非交互。
 
-# 仅更新 Token
-isc auth login --token NEW_TOKEN
-
-# 检查连接和认证状态
-isc auth status
-
-# 清除本地凭据
-isc auth logout
-```
-
-### AI 对话 `isc ai`
+### 聊天 `isc chat`
 
 ```bash
 # 发起新对话（支持 SSE 流式输出）
-isc ai chat "帮我分析用户增长趋势"
+isc chat "帮我分析用户增长趋势"
 
 # 在已有任务中继续对话
-isc ai chat --task-id TASK_ID "请用柱状图展示"
+isc chat --task-id TASK_ID "请用柱状图展示"
 
 # 查看 AI 当前状态
-isc ai state
-isc ai state --task-id TASK_ID
+isc chat state
+isc chat state --task-id TASK_ID
 
 # 查看 API 配置
-isc ai config get
+isc chat config get
 
 # 更新 API 配置
-isc ai config set --provider openai --model gpt-4 --api-key sk-xxx --base-url https://api.openai.com
+isc chat config set --provider openai --model gpt-4 --api-key sk-xxx --base-url https://api.openai.com
 
 # 列出可用模型
-isc ai models
+isc chat models
 
 # 取消正在执行的任务
-isc ai cancel --task-id TASK_ID
+isc chat cancel --task-id TASK_ID
 ```
 
 ### 任务管理 `isc task`
@@ -124,7 +99,7 @@ isc ai cancel --task-id TASK_ID
 # 任务列表（支持分页和筛选）
 isc task list
 isc task list --page 1 --size 20 --name "销售"
-isc task list --category-id CATEGORY_ID --table
+isc task list --category-id CATEGORY_ID
 
 # 查看任务详情
 isc task show TASK_ID
@@ -141,7 +116,7 @@ isc task cancel --task-id TASK_ID
 # --- 分类管理 ---
 
 # 查看所有分类
-isc task category list --table
+isc task category list
 
 # 添加分类
 isc task category add "月度报表"
@@ -155,7 +130,7 @@ isc task category delete CATEGORY_ID
 ```bash
 # 数据源列表
 isc db list
-isc db list --name mysql --type mysql --table
+isc db list --name mysql --type mysql
 
 # 查看数据源详情
 isc db get DATABASE_ID
@@ -198,25 +173,17 @@ isc setting model-info MODEL_ID
 
 ## 输出格式
 
-默认以 JSON 格式输出到 stdout，方便程序化调用和管道处理：
+默认 JSON；在 `~/.isc.yaml` 中设置 `default_output: table` 则各列表类命令以表格输出。
 
 ```bash
-# JSON 输出（默认）
 isc task list
-
-# 表格输出
-isc task list --table
-
-# 结合 jq 处理 JSON
 isc task list | jq '.items[].task_name'
-
-# 重定向到文件
-isc ai state > state.json
+isc chat state > state.json
 ```
 
 ## 配置文件
 
-首次执行 `isc auth login` 后，配置保存在 `~/.isc.yaml`：
+首次执行 `isc init` 后，配置保存在 `~/.isc.yaml`：
 
 ```yaml
 server: http://localhost:7001
@@ -225,7 +192,7 @@ default_output: json
 lang: zh-CN
 ```
 
-也可通过环境变量或全局参数 `--server` / `--token` 临时覆盖。
+服务器地址与 Token 均来自 `~/.isc.yaml`（通过 `isc init` 或手动编辑）。修改后无需额外命令行参数。
 
 ## License
 

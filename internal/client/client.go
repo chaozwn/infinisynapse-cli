@@ -24,12 +24,12 @@ type Client struct {
 func New() (*Client, error) {
 	server := config.GetServer()
 	if server == "" {
-		return nil, fmt.Errorf("server not configured. Run: isc auth login --server <URL> --token <TOKEN>")
+		return nil, fmt.Errorf("server not configured. Run: isc init")
 	}
 
 	token := config.GetToken()
 	if token == "" {
-		return nil, fmt.Errorf("token not configured. Run: isc auth login --server <URL> --token <TOKEN>")
+		return nil, fmt.Errorf("token not configured. Run: isc init")
 	}
 
 	server = strings.TrimRight(server, "/")
@@ -125,7 +125,7 @@ func (c *Client) Do(method, path string, body interface{}) (json.RawMessage, err
 
 	if apiResp.Code != 200 {
 		if apiResp.Code == 1101 || apiResp.Code == 1105 {
-			return nil, fmt.Errorf("token expired or invalid (code: %d). Please re-login: isc auth login", apiResp.Code)
+			return nil, fmt.Errorf("token expired or invalid (code: %d). Please run: isc init", apiResp.Code)
 		}
 		return nil, fmt.Errorf("API error (code: %d): %s", apiResp.Code, apiResp.Message)
 	}
