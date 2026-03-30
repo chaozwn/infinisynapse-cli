@@ -40,6 +40,16 @@ make clean     # 清理构建产物
 make help      # 查看所有可用命令
 ```
 
+### 版本号管理
+
+构建时版本号自动从 git tag 获取，无 tag 时默认为 `0.1.0`。发布新版本时打 tag 即可：
+
+```bash
+git tag v0.2.0
+git push origin v0.2.0
+make cross
+```
+
 ### 环境要求
 
 - Go 1.22+
