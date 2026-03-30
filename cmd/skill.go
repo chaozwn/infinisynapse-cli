@@ -15,8 +15,12 @@ AI Agent Important Notes
 ================================================================================
 
 First-time Setup:
-  Before using any other commands, you MUST initialize configuration:
-  isc init --server "http://app.infinisynapse.cn" --api-key "your_api_key"
+  Before using any other commands, you MUST create ~/.isc/config.key:
+  mkdir -p ~/.isc && cat > ~/.isc/config.key << 'EOF'
+  global:
+    server: "http://app.infinisynapse.cn"
+    api-key: "your_api_key"
+  EOF
 
 Session Workflow (multi-turn chat):
   1. Start a new conversation with a session alias:
@@ -34,7 +38,7 @@ Without --session, each 'isc chat' starts a fresh conversation.
 Available Commands
 ================================================================================
 
-  init                           Interactive setup (server URL + API key)
+  version                        Print version, commit, build date, Go runtime
   chat <message>                 Chat with AI (streaming), supports --session
   chat state                     Get AI state
   chat config get                Get API configuration
@@ -67,6 +71,7 @@ Global Flags
   --session, -s <name>   Session alias for automatic resume across chat calls
   --json                 Force JSON output: {"success": true, "data": ...}
   --skill                Show this detailed specification
+  --version, -v          Print version string
   --help, -h             Show help for any command
 
 ================================================================================
@@ -93,27 +98,58 @@ Common Scenarios
 Output Format
 ================================================================================
 
-JSON mode (--json or default_output=json in ~/.isc.yaml):
+JSON mode (--json or default-output: "json" in config.key):
   {"success": true, "data": { ... }}
   {"success": false, "error": "error message"}
 
-Table mode (default_output=table in ~/.isc.yaml):
+Table mode (default-output: "table" in config.key):
   Formatted table for list commands, JSON for detail commands.
 
 ================================================================================
 Error Handling
 ================================================================================
 
-  - Token expired:     Run 'isc init' to reconfigure
+  - Token expired:     Update api-key in ~/.isc/config.key
   - Server unreachable: Check --server URL and network connectivity
   - Session not found:  A new conversation will be started automatically
 
 ================================================================================
-Configuration
+Configuration & Credential Chain
 ================================================================================
 
-Config file: ~/.isc.yaml
 Session files: ~/.isc/sessions/<name>.json
+
+Configuration is loaded from the first file found in this order
+(per execute_external_tool_resolver.py):
+
+  1. <binary_dir>/isc.key          (tool_basename.key, YAML)
+  2. <binary_dir>/<filename>.key   (tool_filename.key, compat)
+  3. ~/.isc/config.key             (YAML, recommended)
+  4. ~/.isc/config.json            (JSON)
+
+The most common approach: create ~/.isc/ and place config.key or config.json.
+config.key and config.json are alternatives; if config.key exists, config.json
+is not checked.
+
+config.key format (YAML):
+  global:
+    server: "http://app.infinisynapse.cn"
+    api-key: "your_api_key"
+    default-output: "json"
+    lang: "zh-CN"
+
+config.json format (JSON):
+  {
+    "global": {
+      "server": "http://app.infinisynapse.cn",
+      "api-key": "your_api_key"
+    }
+  }
+
+WinClaw Marketplace:
+  The executor (execute_external_tool_resolver.py) reads config.key and injects
+  credentials as CLI flags automatically. Help commands (--help, --skill) do not
+  receive injected parameters.
 `
 
 var skillCmd = &cobra.Command{

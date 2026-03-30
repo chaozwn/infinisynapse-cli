@@ -25,6 +25,12 @@ func getOutputFormat() output.Format {
 	return output.FormatJSON
 }
 
+var skipConfigCmds = map[string]bool{
+	"skill":   true,
+	"version": true,
+	"help":    true,
+}
+
 var rootCmd = &cobra.Command{
 	Use:   "isc",
 	Short: "InfiniSynapse CLI - command line tool for InfiniSynapse",
@@ -37,7 +43,6 @@ Key Features:
   - Unified JSON output for pipeline composability
 
 Quick Start:
-  isc init
   isc chat "Hello, analyze my data" --session main
   isc chat "Show me the trends" --session main
 
@@ -46,7 +51,7 @@ Use 'isc --skill' or 'isc skill' for detailed command specifications.
 For more information about a specific command, use:
   isc [command] --help`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		if cmd.Name() == "skill" || showSkill {
+		if showSkill || skipConfigCmds[cmd.Name()] {
 			return nil
 		}
 		return config.Init()
@@ -61,6 +66,7 @@ For more information about a specific command, use:
 }
 
 func init() {
+	rootCmd.Version = Version
 	rootCmd.PersistentFlags().StringVarP(&sessionName, "session", "s", "",
 		"Session alias name for automatic resume")
 	rootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false,
