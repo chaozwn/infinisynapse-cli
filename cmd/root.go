@@ -70,23 +70,38 @@ func printInitHint() {
 
 var rootCmd = &cobra.Command{
 	Use:   "agent_infini",
-	Short: "InfiniSynapse CLI - command line tool for InfiniSynapse",
-	Long: `agent_infini is a CLI tool that allows you to interact with InfiniSynapse backend APIs
-from the terminal, designed for both human users and AI agent workflows.
+	Short: "CLI for InfiniSynapse — AI-powered data analysis from the terminal",
+	Long: `agent_infini is a CLI tool for interacting with the InfiniSynapse platform,
+designed for both human users and AI agent workflows.
 
-Key Features:
-  - Chat with AI with task-based multi-turn support
-  - Unified JSON output for pipeline composability
+Key features:
+  - Multi-turn AI task conversations (create, ask, cancel)
+  - Database connection management (list, enable, disable)
+  - RAG knowledge base management (list, enable, disable)
+  - Workspace file operations (list, preview, download)
+  - Unified JSON / table output for pipeline composability
 
-Quick Start:
-  agent_infini task new "Analyze my data"
-  agent_infini task ask <taskId> "Show trends"
-  agent_infini task ls
+Quick start:
+  1. Initialize:      agent_infini init --api-key <your-key>
+  2. List resources:  agent_infini db ls              (list all databases)
+                      agent_infini rag ls             (list all RAG knowledge bases)
+  3. Check context:   agent_infini task context       (verify target databases and RAGs are enabled)
+     If needed:       agent_infini db enable <id>     (enable a database)
+                      agent_infini rag enable <id>    (enable a RAG knowledge base)
+  4. Create task:     agent_infini task new "Analyze my data"
+  5. Follow up:       agent_infini task ask <taskId> "Show trends"
+  6. Browse tasks:    agent_infini task ls
 
-Use 'agent_infini --skill' or 'agent_infini skill' for detailed command specifications.
+Available command groups:
+  init      Configure server address, API key, and preferences
+  task      Create and manage multi-turn AI task conversations
+  db        List, enable, or disable database connections
+  rag       List, enable, or disable RAG knowledge bases
+  skill     Show detailed command specification for AI agents
+  version   Print version and build information
 
-For more information about a specific command, use:
-  agent_infini [command] --help`,
+Use 'agent_infini --skill' or 'agent_infini skill' for the full AI agent specification.
+Use 'agent_infini [command] --help' for details on a specific command.`,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		if showSkill || skipConfigCmds[cmd.Name()] {
 			return nil
@@ -106,9 +121,9 @@ For more information about a specific command, use:
 func init() {
 	rootCmd.Version = Version
 	rootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false,
-		"Output in JSON format: {success, data, error}")
+		"Force JSON output: {success, data, error}")
 	rootCmd.Flags().BoolVar(&showSkill, "skill", false,
-		"Show the detailed command specification")
+		"Show the full AI agent command specification")
 
 	defaultHelp := rootCmd.HelpFunc()
 	rootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
