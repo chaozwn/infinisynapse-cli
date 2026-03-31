@@ -31,12 +31,41 @@ var skipConfigCmds = map[string]bool{
 	"help":    true,
 }
 
-func printInitHint() {
-	if config.IsInitialized() {
-		fmt.Fprintf(os.Stderr, "\n[OK] Configuration initialized.\n")
-	} else {
-		fmt.Fprintf(os.Stderr, "\n[WARNING] Not initialized. Run 'agent_infini init --help' to get started.\n")
+func maskToken(token string) string {
+	if len(token) <= 8 {
+		return "****"
 	}
+	return token[:4] + "****" + token[len(token)-4:]
+}
+
+func printInitHint() {
+	fmt.Fprintf(os.Stderr, "\n── Checking Environment ──\n")
+
+	config.Init()
+
+	if !config.IsInitialized() {
+		fmt.Fprintf(os.Stderr, "  Status   : NOT CONFIGURED\n")
+		fmt.Fprintf(os.Stderr, "\n  Run 'agent_infini init --help' to get started.\n\n")
+		return
+	}
+
+	server := config.GetServer()
+	if server == "" {
+		server = "(default)"
+	}
+	token := config.GetToken()
+	userID := config.GetUserID()
+	if userID == "" {
+		userID = "(not set)"
+	}
+
+	fmt.Fprintf(os.Stderr, "  Status   : Ready\n")
+	fmt.Fprintf(os.Stderr, "  Server   : %s\n", server)
+	fmt.Fprintf(os.Stderr, "  API Key  : %s\n", maskToken(token))
+	fmt.Fprintf(os.Stderr, "  Console  : %s\n", config.GetConsole())
+	fmt.Fprintf(os.Stderr, "  Language : %s\n", config.GetPreferLanguage())
+	fmt.Fprintf(os.Stderr, "  User ID  : %s\n", userID)
+	fmt.Fprintf(os.Stderr, "\n  All set — you can start working now.\n\n")
 }
 
 var rootCmd = &cobra.Command{
