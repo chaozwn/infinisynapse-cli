@@ -29,6 +29,19 @@ Examples:
 		preferLang, _ := cmd.Flags().GetString("prefer-language")
 		consoleURL, _ := cmd.Flags().GetString("console")
 
+		if server == "" {
+			server = "https://app.infinisynapse.cn"
+		}
+		if apiKey == "" {
+			return fmt.Errorf("required flag \"api-key\" not set")
+		}
+		if preferLang == "" {
+			preferLang = "zh_CN"
+		}
+		if consoleURL == "" {
+			consoleURL = config.DefaultConsoleURL
+		}
+
 		valid := false
 		for _, l := range config.SupportedLanguages {
 			if l == preferLang {
@@ -69,11 +82,5 @@ Examples:
 }
 
 func init() {
-	initCmd.Flags().String("server", "https://app.infinisynapse.cn", "Server address")
-	initCmd.Flags().String("api-key", "", "API key for authentication (required)")
-	initCmd.Flags().String("prefer-language", "zh_CN", fmt.Sprintf("Preferred language (%s)", strings.Join(config.SupportedLanguages, ", ")))
-	initCmd.Flags().String("console", config.DefaultConsoleURL, "Console API base URL (e.g. https://api.infinisynapse.cn/api)")
-	_ = initCmd.MarkFlagRequired("api-key")
-
 	rootCmd.AddCommand(initCmd)
 }

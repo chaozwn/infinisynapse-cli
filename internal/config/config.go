@@ -151,6 +151,14 @@ func Save(values map[string]string) error {
 	return nil
 }
 
+// Set overrides a config value at runtime (e.g. from CLI flags).
+func Set(key, value string) {
+	if cfg.Global == nil {
+		cfg.Global = make(map[string]string)
+	}
+	cfg.Global[key] = value
+}
+
 func Get(key string) string {
 	if v, ok := cfg.Global[key]; ok && v != "" {
 		return v

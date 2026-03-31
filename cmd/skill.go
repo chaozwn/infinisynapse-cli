@@ -97,6 +97,13 @@ Global Flags
   --version, -v        Print version string
   --help, -h           Show help for any command
 
+  Credential overrides (auto-injected by WinClaw executor, also usable manually):
+  --api-key <key>      Override API key from config
+  --server <url>       Override server address from config
+  --console <url>      Override console API base URL from config
+  --prefer-language <l> Override preferred language from config
+  --default-output <f> Override default output format (json|table)
+
 ================================================================================
 Common Scenarios
 ================================================================================
@@ -190,9 +197,10 @@ config.json format (JSON):
 Supported languages: en, zh_CN, ar, ja, ko, ru
 
 WinClaw Marketplace:
-  The executor (execute_external_tool_resolver.py) reads config.key and injects
-  credentials as CLI flags automatically. Help commands (--help, --skill) do not
-  receive injected parameters.
+  The executor reads config.key and injects credentials as global CLI flags
+  (--api-key, --server, --console, etc.) automatically. These flags are accepted
+  by all commands and override the corresponding config file values.
+  Help commands (--help, --skill) do not receive injected parameters.
 `
 
 var skillCmd = &cobra.Command{

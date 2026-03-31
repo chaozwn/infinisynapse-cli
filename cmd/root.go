@@ -110,7 +110,11 @@ Use 'agent_infini [command] --help' for details on a specific command.`,
 		if showSkill || skipConfigCmds[cmd.Name()] {
 			return nil
 		}
-		return config.Init()
+		if err := config.Init(); err != nil {
+			return err
+		}
+		applyFlagOverrides(cmd)
+		return nil
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		if showSkill {
@@ -122,6 +126,25 @@ Use 'agent_infini [command] --help' for details on a specific command.`,
 	},
 }
 
+// injectableKeys lists the config keys that the WinClaw executor may inject as CLI flags.
+var injectableKeys = []string{
+	config.KeyAPIKey,
+	config.KeyServer,
+	config.KeyConsole,
+	config.KeyPreferLanguage,
+	config.KeyOutput,
+}
+
+func applyFlagOverrides(cmd *cobra.Command) {
+	for _, key := range injectableKeys {
+		if cmd.Flags().Changed(key) {
+			if val, _ := cmd.Flags().GetString(key); val != "" {
+				config.Set(key, val)
+			}
+		}
+	}
+}
+
 func init() {
 	rootCmd.Version = Version
 	rootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false,
@@ -130,6 +153,13 @@ func init() {
 		"Force table output for list commands")
 	rootCmd.Flags().BoolVar(&showSkill, "skill", false,
 		"Show the full AI agent command specification")
+
+	pf := rootCmd.PersistentFlags()
+	pf.String("api-key", "", "API key (auto-injected by WinClaw executor)")
+	pf.String("server", "", "Server address override")
+	pf.String("console", "", "Console API base URL override")
+	pf.String("prefer-language", "", "Preferred language override")
+	pf.String("default-output", "", "Default output format override (json|table)")
 
 	defaultHelp := rootCmd.HelpFunc()
 	rootCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
