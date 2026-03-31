@@ -226,8 +226,24 @@ var taskListCmd = &cobra.Command{
 			return nil
 		}
 
-		output.PrintResult(result, nil)
-		return nil
+		printer := output.NewPrinter(getOutputFormat())
+		return printer.Print(
+			result,
+			[]string{"ID", "TaskName", "Status", "UpdatedAt"},
+			func(v interface{}) [][]string {
+				r := v.(types.TaskListResponse)
+				rows := make([][]string, len(r.Items))
+				for i, item := range r.Items {
+					rows[i] = []string{
+						item.ID,
+						truncate(item.TaskName, 40),
+						item.Status,
+						item.UpdatedAt,
+					}
+				}
+				return rows
+			},
+		)
 	},
 }
 
@@ -381,17 +397,16 @@ var taskCancelCmd = &cobra.Command{
 			TaskID: taskID,
 		}
 
-		data, err := c.Post("/api/ai/message", msg)
+		_, err = c.Post("/api/ai/message", msg)
 		if err != nil {
-			return err
+			output.PrintResult(nil, err)
+			return nil
 		}
 
-		output.PrintSuccess("Task %s cancelled", taskID)
-
-		if data != nil {
-			printer := output.NewPrinter(getOutputFormat())
-			return printer.PrintJSON(data)
-		}
+		output.PrintResult(map[string]interface{}{
+			"taskId": taskID,
+			"action": "cancelled",
+		}, nil)
 		return nil
 	},
 }
@@ -688,7 +703,7 @@ Examples:
 			output.PrintResult(nil, fmt.Errorf("file not found: %s", fileName))
 			return nil
 		}
-		fmt.Print(*resp.Content)
+		fmt.Println(*resp.Content)
 		return nil
 	},
 }
