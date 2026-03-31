@@ -106,6 +106,9 @@ Manage tasks:
   agent_infini task rm <taskId>
   agent_infini task cancel <taskId>
 
+View enabled resources:
+  agent_infini task context
+
 Workspace files:
   agent_infini task file <taskId>
   agent_infini task preview <taskId> <fileName>
@@ -392,6 +395,138 @@ var taskCancelCmd = &cobra.Command{
 }
 
 // ---------------------------------------------------------------------------
+// task context
+// ---------------------------------------------------------------------------
+
+var taskContextCmd = &cobra.Command{
+	Use:     "context",
+	Aliases: []string{"ctx"},
+	Short:   "Show enabled databases and RAGs for tasks",
+	Long: `Display all currently enabled databases and RAG knowledge bases,
+along with their related resources and actual enabled status.
+
+Examples:
+  agent_infini task context
+  agent_infini task ctx`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		c, err := client.New()
+		if err != nil {
+			output.PrintResult(nil, err)
+			return nil
+		}
+
+		params := map[string]string{
+			"enabled":  "1",
+			"pageSize": "100",
+			"field":    "updated_at",
+			"order":    "desc",
+			"source":   "all",
+		}
+
+		type chanResult struct {
+			data json.RawMessage
+			err  error
+		}
+
+		dbCh := make(chan chanResult, 1)
+		ragCh := make(chan chanResult, 1)
+
+		go func() {
+			d, e := c.Get("/api/ai_database/list", params)
+			dbCh <- chanResult{d, e}
+		}()
+		go func() {
+			d, e := c.Get("/api/ai_rag_sdk", params)
+			ragCh <- chanResult{d, e}
+		}()
+
+		dbRes := <-dbCh
+		ragRes := <-ragCh
+
+		if dbRes.err != nil {
+			output.PrintResult(nil, fmt.Errorf("failed to fetch databases: %w", dbRes.err))
+			return nil
+		}
+		if ragRes.err != nil {
+			output.PrintResult(nil, fmt.Errorf("failed to fetch RAGs: %w", ragRes.err))
+			return nil
+		}
+
+		var dbResult types.DatabaseListResponse
+		if err := json.Unmarshal(dbRes.data, &dbResult); err != nil {
+			output.PrintResult(nil, fmt.Errorf("failed to parse database list: %w", err))
+			return nil
+		}
+
+		var ragResult types.RagListResponse
+		if err := json.Unmarshal(ragRes.data, &ragResult); err != nil {
+			output.PrintResult(nil, fmt.Errorf("failed to parse RAG list: %w", err))
+			return nil
+		}
+
+		printer := output.NewPrinter(getOutputFormat())
+
+		if getOutputFormat() == output.FormatTable {
+			fmt.Printf("Enabled Databases (%d):\n", len(dbResult.Items))
+			dbRows := make([][]string, len(dbResult.Items))
+			for i, item := range dbResult.Items {
+				related := formatRelatedRags(item.RagList)
+				dbRows[i] = []string{item.ID, item.Name, item.Type, item.Source, related}
+			}
+			printer.PrintTable([]string{"ID", "Name", "Type", "Source", "RelatedRAGs"}, dbRows)
+
+			fmt.Printf("\nEnabled RAGs (%d):\n", len(ragResult.Items))
+			ragRows := make([][]string, len(ragResult.Items))
+			for i, item := range ragResult.Items {
+				related := formatRelatedDBs(item.DatabaseList)
+				ragRows[i] = []string{item.ID, item.Name, item.Source, related}
+			}
+			printer.PrintTable([]string{"ID", "Name", "Source", "RelatedDBs"}, ragRows)
+			return nil
+		}
+
+		return printer.PrintJSON(map[string]interface{}{
+			"databases": dbResult.Items,
+			"rags":      ragResult.Items,
+			"summary": map[string]int{
+				"databases": len(dbResult.Items),
+				"rags":      len(ragResult.Items),
+			},
+		})
+	},
+}
+
+func formatRelatedRags(rags []types.RelatedRag) string {
+	if len(rags) == 0 {
+		return "-"
+	}
+	parts := make([]string, len(rags))
+	for i, r := range rags {
+		status := "disabled"
+		if r.Enabled == 1 {
+			status = "enabled"
+		}
+		parts[i] = fmt.Sprintf("%s (%s)", r.Name, status)
+	}
+	return strings.Join(parts, ", ")
+}
+
+func formatRelatedDBs(dbs []types.RelatedDatabase) string {
+	if len(dbs) == 0 {
+		return "-"
+	}
+	parts := make([]string, len(dbs))
+	for i, d := range dbs {
+		status := "disabled"
+		if d.Enabled == 1 {
+			status = "enabled"
+		}
+		parts[i] = fmt.Sprintf("%s (%s)", d.Name, status)
+	}
+	return strings.Join(parts, ", ")
+}
+
+// ---------------------------------------------------------------------------
 // task file
 // ---------------------------------------------------------------------------
 
@@ -546,6 +681,7 @@ func init() {
 	taskCmd.AddCommand(taskShowCmd)
 	taskCmd.AddCommand(taskRemoveCmd)
 	taskCmd.AddCommand(taskCancelCmd)
+	taskCmd.AddCommand(taskContextCmd)
 	taskCmd.AddCommand(taskFileCmd)
 	taskCmd.AddCommand(taskPreviewCmd)
 	taskCmd.AddCommand(taskDownloadCmd)
