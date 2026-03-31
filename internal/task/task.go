@@ -22,17 +22,17 @@ type StreamResult struct {
 	LastMessage *StreamEvent
 }
 
-func RunNewTask(query string, jsonMode bool) (*StreamResult, error) {
+func RunNewTask(query string) (*StreamResult, error) {
 	connID := uuid.New().String()
 	msg := types.WebviewMessage{
 		Type:   "newTask",
 		Text:   query,
 		ConnID: connID,
 	}
-	return runStreamingChat(connID, msg, jsonMode)
+	return runStreamingChat(connID, msg)
 }
 
-func RunAskResponse(taskID, query string, jsonMode bool) (*StreamResult, error) {
+func RunAskResponse(taskID, query string) (*StreamResult, error) {
 	connID := uuid.New().String()
 	msg := types.WebviewMessage{
 		Type:        "askResponse",
@@ -41,7 +41,7 @@ func RunAskResponse(taskID, query string, jsonMode bool) (*StreamResult, error) 
 		TaskID:      taskID,
 		AskResponse: "messageResponse",
 	}
-	return runStreamingChat(connID, msg, jsonMode)
+	return runStreamingChat(connID, msg)
 }
 
 type StreamEvent struct {
@@ -55,7 +55,7 @@ type StreamEvent struct {
 	Partial   bool   `json:"partial"`
 }
 
-func runStreamingChat(connID string, msg types.WebviewMessage, jsonMode bool) (*StreamResult, error) {
+func runStreamingChat(connID string, msg types.WebviewMessage) (*StreamResult, error) {
 	c, err := client.NewWithOverrides("", "")
 	if err != nil {
 		return nil, err
@@ -103,85 +103,70 @@ func runStreamingChat(connID string, msg types.WebviewMessage, jsonMode bool) (*
 			}
 
 			switch event.Event {
-			case "message.partial":
-				if err := json.Unmarshal([]byte(event.Data), &payload); err != nil {
-					return true
-				}
-
-				if payload.TaskID != "" {
-					capturedTaskID = payload.TaskID
-				}
-
-				m := payload.Message
-
-				if m.Type == "ask" && !m.Partial {
-					lastAskType = m.Ask
-					if jsonMode {
-						emitJSON(StreamEvent{TaskID: capturedTaskID, Ts: m.Ts, Type: m.Type, Ask: m.Ask, Text: m.Text, Partial: m.Partial})
-					}
-					return false
-				}
-
-				if m.Type == "say" && m.Ask != "completion_result" {
-					ev := &StreamEvent{TaskID: capturedTaskID, Ts: m.Ts, Type: m.Type, Say: m.Say, Text: m.Text, Reasoning: m.Reasoning, Partial: m.Partial}
-					lastMessage = ev
-				}
-
-				if jsonMode {
-					emitJSON(StreamEvent{TaskID: capturedTaskID, Ts: m.Ts, Type: m.Type, Say: m.Say, Text: m.Text, Reasoning: m.Reasoning, Partial: m.Partial})
-				}
-
-			case "message.add":
-				if err := json.Unmarshal([]byte(event.Data), &payload); err != nil {
-					return true
-				}
-
-				if payload.TaskID != "" {
-					capturedTaskID = payload.TaskID
-				}
-
-				m := payload.Message
-
-				if !(m.Type == "ask" && m.Ask == "completion_result") {
-					ev := &StreamEvent{TaskID: capturedTaskID, Ts: m.Ts, Type: m.Type, Say: m.Say, Ask: m.Ask, Text: m.Text, Reasoning: m.Reasoning, Partial: m.Partial}
-					lastMessage = ev
-				}
-
-				if jsonMode {
-					emitJSON(StreamEvent{TaskID: capturedTaskID, Ts: m.Ts, Type: m.Type, Say: m.Say, Ask: m.Ask, Text: m.Text, Reasoning: m.Reasoning, Partial: m.Partial})
-				}
-
-				if m.Type == "ask" && !m.Partial {
-					lastAskType = m.Ask
-					return false
-				}
-				if m.Say == "completion_result" {
-					return false
-				}
-
-			case "message.update":
-				return true
-
-			case "state.ready":
-				return true
-
-			case "notification":
-				var notif struct {
-					Type    string `json:"type"`
-					Title   string `json:"title"`
-					Message string `json:"message"`
-				}
-				if err := json.Unmarshal([]byte(event.Data), &notif); err == nil {
-					if notif.Type == "error" {
-						if jsonMode {
-							emitJSON(map[string]string{"type": "error", "title": notif.Title, "message": notif.Message})
-						} else {
-							fmt.Fprintf(os.Stderr, "\n[%s] %s: %s\n", notif.Type, notif.Title, notif.Message)
-						}
-					}
-				}
+		case "message.partial":
+			if err := json.Unmarshal([]byte(event.Data), &payload); err != nil {
 				return true
 			}
+
+			if payload.TaskID != "" {
+				capturedTaskID = payload.TaskID
+			}
+
+			m := payload.Message
+
+			if m.Type == "ask" && !m.Partial {
+				lastAskType = m.Ask
+				return false
+			}
+
+			if m.Type == "say" && m.Ask != "completion_result" {
+				ev := &StreamEvent{TaskID: capturedTaskID, Ts: m.Ts, Type: m.Type, Say: m.Say, Text: m.Text, Reasoning: m.Reasoning, Partial: m.Partial}
+				lastMessage = ev
+			}
+
+		case "message.add":
+			if err := json.Unmarshal([]byte(event.Data), &payload); err != nil {
+				return true
+			}
+
+			if payload.TaskID != "" {
+				capturedTaskID = payload.TaskID
+			}
+
+			m := payload.Message
+
+			if !(m.Type == "ask" && m.Ask == "completion_result") {
+				ev := &StreamEvent{TaskID: capturedTaskID, Ts: m.Ts, Type: m.Type, Say: m.Say, Ask: m.Ask, Text: m.Text, Reasoning: m.Reasoning, Partial: m.Partial}
+				lastMessage = ev
+			}
+
+			if m.Type == "ask" && !m.Partial {
+				lastAskType = m.Ask
+				return false
+			}
+			if m.Say == "completion_result" {
+				return false
+			}
+
+		case "message.update":
+			return true
+
+		case "state.ready":
+			return true
+
+		case "notification":
+			var notif struct {
+				Type    string `json:"type"`
+				Title   string `json:"title"`
+				Message string `json:"message"`
+			}
+			if err := json.Unmarshal([]byte(event.Data), &notif); err == nil {
+				if notif.Type == "error" {
+					fmt.Fprintf(os.Stderr, "\n[%s] %s: %s\n", notif.Type, notif.Title, notif.Message)
+				}
+			}
+			return true
+		}
 
 			return true
 		})
@@ -236,10 +221,3 @@ func runStreamingChat(connID string, msg types.WebviewMessage, jsonMode bool) (*
 	}, nil
 }
 
-func emitJSON(v interface{}) {
-	data, err := json.Marshal(v)
-	if err != nil {
-		return
-	}
-	fmt.Println(string(data))
-}

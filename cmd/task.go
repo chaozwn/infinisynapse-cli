@@ -75,10 +75,17 @@ func fetchWorkspaceInfo(c *client.Client, taskID string) *workspaceInfo {
 	return &ws
 }
 
-func enrichStreamResult(result *task.StreamResult) map[string]interface{} {
-	res := map[string]interface{}{
-		"lastMessage": result.LastMessage,
-		"taskId":      result.TaskID,
+type enrichedResult struct {
+	TaskID    string                 `json:"taskId"`
+	Status    string                 `json:"status,omitempty"`
+	Message   *task.StreamEvent      `json:"lastMessage,omitempty"`
+	Workspace map[string]interface{} `json:"workspace,omitempty"`
+}
+
+func enrichStreamResult(result *task.StreamResult) *enrichedResult {
+	res := &enrichedResult{
+		TaskID:  result.TaskID,
+		Message: result.LastMessage,
 	}
 	c, err := client.New()
 	if err != nil {
@@ -91,12 +98,35 @@ func enrichStreamResult(result *task.StreamResult) map[string]interface{} {
 	go func() { wsCh <- fetchWorkspaceInfo(c, result.TaskID) }()
 
 	if s := <-statusCh; s != "" {
-		res["status"] = s
+		res.Status = s
 	}
 	if ws := <-wsCh; ws != nil {
-		res["workspace"] = map[string]interface{}{"files": ws.FullPaths()}
+		res.Workspace = map[string]interface{}{"files": ws.FullPaths()}
 	}
 	return res
+}
+
+func printStreamResult(res *enrichedResult) {
+	if getOutputFormat() == output.FormatTable {
+		messageText := ""
+		if res.Message != nil {
+			messageText = res.Message.Text
+		}
+		files := ""
+		if res.Workspace != nil {
+			if f, ok := res.Workspace["files"].([]string); ok {
+				files = strings.Join(f, "\n")
+			}
+		}
+
+		printer := output.NewPrinter(output.FormatTable)
+		printer.PrintTable(
+			[]string{"TaskID", "Status", "Message", "Files"},
+			[][]string{{res.TaskID, res.Status, truncate(messageText, 80), files}},
+		)
+		return
+	}
+	output.PrintResult(res, nil)
 }
 
 func fetchEnabledContext(c *client.Client) ([]types.DatabaseItem, []types.RagItem, error) {
@@ -192,14 +222,12 @@ Examples:
 			return fmt.Errorf("query is required: provide as argument or via --query")
 		}
 
-		result, err := task.RunNewTask(query, jsonOutput)
+		result, err := task.RunNewTask(query)
 		if err != nil {
 			output.PrintResult(nil, err)
 			return nil
 		}
-		if !jsonOutput {
-			output.PrintResult(enrichStreamResult(result), nil)
-		}
+		printStreamResult(enrichStreamResult(result))
 		return nil
 	},
 }
@@ -228,14 +256,12 @@ Examples:
 			return fmt.Errorf("query is required: provide as argument or via --query")
 		}
 
-		result, err := task.RunAskResponse(taskID, query, jsonOutput)
+		result, err := task.RunAskResponse(taskID, query)
 		if err != nil {
 			output.PrintResult(nil, err)
 			return nil
 		}
-		if !jsonOutput {
-			output.PrintResult(enrichStreamResult(result), nil)
-		}
+		printStreamResult(enrichStreamResult(result))
 		return nil
 	},
 }
@@ -345,6 +371,10 @@ var taskShowCmd = &cobra.Command{
 		var parsed map[string]interface{}
 		if err := json.Unmarshal(tiRes.data, &parsed); err != nil {
 			output.PrintResult(nil, fmt.Errorf("failed to parse task info: %w", err))
+			return nil
+		}
+		if parsed == nil {
+			output.PrintResult(nil, fmt.Errorf("task not found: %s", taskID))
 			return nil
 		}
 
