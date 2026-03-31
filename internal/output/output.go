@@ -35,38 +35,30 @@ func NewPrinter(format Format) *Printer {
 }
 
 func (p *Printer) PrintJSON(data interface{}) error {
-	var output []byte
-	var err error
+	var raw []byte
 
 	switch v := data.(type) {
 	case json.RawMessage:
-		var parsed interface{}
-		if err := json.Unmarshal(v, &parsed); err != nil {
-			output = v
-		} else {
-			output, err = json.MarshalIndent(parsed, "", "  ")
-			if err != nil {
-				return err
-			}
-		}
+		raw = []byte(v)
 	case []byte:
-		var parsed interface{}
-		if err := json.Unmarshal(v, &parsed); err != nil {
-			output = v
-		} else {
-			output, err = json.MarshalIndent(parsed, "", "  ")
-			if err != nil {
-				return err
-			}
-		}
+		raw = v
 	default:
-		output, err = json.MarshalIndent(data, "", "  ")
-		if err != nil {
-			return err
-		}
 	}
 
-	fmt.Fprintln(p.writer, string(output))
+	if raw != nil {
+		var parsed interface{}
+		if err := json.Unmarshal(raw, &parsed); err != nil {
+			fmt.Fprintln(p.writer, string(raw))
+			return nil
+		}
+		data = parsed
+	}
+
+	out, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		return err
+	}
+	fmt.Fprintln(p.writer, string(out))
 	return nil
 }
 

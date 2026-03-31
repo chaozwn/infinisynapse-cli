@@ -21,27 +21,15 @@ type Client struct {
 	httpClient *http.Client
 }
 
+func BearerToken(token string) string {
+	if token == "" || strings.HasPrefix(token, "Bearer ") {
+		return token
+	}
+	return "Bearer " + token
+}
+
 func New() (*Client, error) {
-	server := config.GetServer()
-	if server == "" {
-		return nil, fmt.Errorf("server not configured. Run 'agent_infini init --api-key <key>' or create ~/.agent_infini/config.key")
-	}
-
-	token := config.GetToken()
-	if token == "" {
-		return nil, fmt.Errorf("api-key not configured. Run 'agent_infini init --api-key <key>' or create ~/.agent_infini/config.key")
-	}
-
-	server = strings.TrimRight(server, "/")
-
-	return &Client{
-		baseURL: server,
-		token:   token,
-		lang:    config.GetPreferLanguage(),
-		httpClient: &http.Client{
-			Timeout: 100 * time.Second,
-		},
-	}, nil
+	return NewWithOverrides("", "")
 }
 
 func NewWithOverrides(server, token string) (*Client, error) {
@@ -52,13 +40,14 @@ func NewWithOverrides(server, token string) (*Client, error) {
 		token = config.GetToken()
 	}
 	if server == "" {
-		return nil, fmt.Errorf("server not configured")
+		return nil, fmt.Errorf("server not configured. Run 'agent_infini init --api-key <key>' or create ~/.agent_infini/config.key")
+	}
+	if token == "" {
+		return nil, fmt.Errorf("api-key not configured. Run 'agent_infini init --api-key <key>' or create ~/.agent_infini/config.key")
 	}
 
-	server = strings.TrimRight(server, "/")
-
 	return &Client{
-		baseURL: server,
+		baseURL: strings.TrimRight(server, "/"),
 		token:   token,
 		lang:    config.GetPreferLanguage(),
 		httpClient: &http.Client{
@@ -85,11 +74,7 @@ func (c *Client) newRequest(method, path string, body interface{}) (*http.Reques
 	}
 
 	if c.token != "" {
-		token := c.token
-		if !strings.HasPrefix(token, "Bearer ") {
-			token = "Bearer " + token
-		}
-		req.Header.Set("Authorization", token)
+		req.Header.Set("Authorization", BearerToken(c.token))
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("x-lang", c.lang)

@@ -39,12 +39,8 @@ func (s *SSEClient) Subscribe(ctx context.Context, path string, ready chan<- str
 		return fmt.Errorf("failed to create SSE request: %w", err)
 	}
 
-	token := s.client.token
-	if token != "" {
-		if !strings.HasPrefix(token, "Bearer ") {
-			token = "Bearer " + token
-		}
-		req.Header.Set("Authorization", token)
+	if s.client.token != "" {
+		req.Header.Set("Authorization", BearerToken(s.client.token))
 	}
 	req.Header.Set("Accept", "text/event-stream")
 	req.Header.Set("Cache-Control", "no-cache")

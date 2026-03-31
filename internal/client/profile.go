@@ -27,11 +27,7 @@ func FetchUserID(consoleURL, apiKey string) (string, error) {
 		return "", fmt.Errorf("failed to create profile request: %w", err)
 	}
 
-	token := apiKey
-	if !strings.HasPrefix(token, "Bearer ") {
-		token = "Bearer " + token
-	}
-	req.Header.Set("Authorization", token)
+	req.Header.Set("Authorization", BearerToken(apiKey))
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := client.Do(req)

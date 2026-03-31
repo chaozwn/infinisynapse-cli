@@ -210,11 +210,12 @@ func parseIDArgs(args []string) []string {
 	return ids
 }
 
-func truncate(s string, maxLen int) string {
-	if len(s) <= maxLen {
+func truncate(s string, maxRunes int) string {
+	runes := []rune(s)
+	if len(runes) <= maxRunes {
 		return s
 	}
-	return s[:maxLen-3] + "..."
+	return string(runes[:maxRunes-3]) + "..."
 }
 
 // ---------------------------------------------------------------------------

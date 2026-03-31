@@ -23,18 +23,9 @@ import (
 // helpers
 // ---------------------------------------------------------------------------
 
-func fetchTaskStatus(c *client.Client, taskID string) string {
-	data, err := c.Get(fmt.Sprintf("/api/ai_task/getTaskInfo/%s", taskID), nil)
-	if err != nil {
-		return ""
-	}
-	var info struct {
-		Status string `json:"status"`
-	}
-	if err := json.Unmarshal(data, &info); err != nil {
-		return ""
-	}
-	return info.Status
+type chanResult struct {
+	data json.RawMessage
+	err  error
 }
 
 type workspaceInfo struct {
@@ -58,6 +49,20 @@ func (ws *workspaceInfo) FullPaths() []string {
 	return paths
 }
 
+func fetchTaskStatus(c *client.Client, taskID string) string {
+	data, err := c.Get(fmt.Sprintf("/api/ai_task/getTaskInfo/%s", taskID), nil)
+	if err != nil {
+		return ""
+	}
+	var info struct {
+		Status string `json:"status"`
+	}
+	if err := json.Unmarshal(data, &info); err != nil {
+		return ""
+	}
+	return info.Status
+}
+
 func fetchWorkspaceInfo(c *client.Client, taskID string) *workspaceInfo {
 	data, err := c.Get(fmt.Sprintf("/api/ai_task/getTaskWorkspace/%s", taskID), nil)
 	if err != nil {
@@ -79,11 +84,61 @@ func enrichStreamResult(result *task.StreamResult) map[string]interface{} {
 	if err != nil {
 		return res
 	}
-	res["status"] = fetchTaskStatus(c, result.TaskID)
-	if ws := fetchWorkspaceInfo(c, result.TaskID); ws != nil {
+
+	statusCh := make(chan string, 1)
+	wsCh := make(chan *workspaceInfo, 1)
+	go func() { statusCh <- fetchTaskStatus(c, result.TaskID) }()
+	go func() { wsCh <- fetchWorkspaceInfo(c, result.TaskID) }()
+
+	if s := <-statusCh; s != "" {
+		res["status"] = s
+	}
+	if ws := <-wsCh; ws != nil {
 		res["workspace"] = map[string]interface{}{"files": ws.FullPaths()}
 	}
 	return res
+}
+
+func fetchEnabledContext(c *client.Client) ([]types.DatabaseItem, []types.RagItem, error) {
+	params := map[string]string{
+		"enabled":  "1",
+		"pageSize": "100",
+		"field":    "updated_at",
+		"order":    "desc",
+		"source":   "all",
+	}
+
+	dbCh := make(chan chanResult, 1)
+	ragCh := make(chan chanResult, 1)
+
+	go func() {
+		d, e := c.Get("/api/ai_database/list", params)
+		dbCh <- chanResult{d, e}
+	}()
+	go func() {
+		d, e := c.Get("/api/ai_rag_sdk", params)
+		ragCh <- chanResult{d, e}
+	}()
+
+	dbRes := <-dbCh
+	ragRes := <-ragCh
+
+	if dbRes.err != nil {
+		return nil, nil, fmt.Errorf("failed to fetch databases: %w", dbRes.err)
+	}
+	if ragRes.err != nil {
+		return nil, nil, fmt.Errorf("failed to fetch RAGs: %w", ragRes.err)
+	}
+
+	var dbResult types.DatabaseListResponse
+	if err := json.Unmarshal(dbRes.data, &dbResult); err != nil {
+		return nil, nil, fmt.Errorf("failed to parse database list: %w", err)
+	}
+	var ragResult types.RagListResponse
+	if err := json.Unmarshal(ragRes.data, &ragResult); err != nil {
+		return nil, nil, fmt.Errorf("failed to parse RAG list: %w", err)
+	}
+	return dbResult.Items, ragResult.Items, nil
 }
 
 // ---------------------------------------------------------------------------
@@ -264,11 +319,6 @@ var taskShowCmd = &cobra.Command{
 
 		taskID := args[0]
 
-		type chanResult struct {
-			data json.RawMessage
-			err  error
-		}
-
 		taskInfoCh := make(chan chanResult, 1)
 		uiMsgCh := make(chan chanResult, 1)
 		wsCh := make(chan chanResult, 1)
@@ -344,15 +394,7 @@ Pass one or more IDs separated by spaces or commas:
 	Aliases: []string{"delete", "remove"},
 	Args:    cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		var ids []string
-		for _, arg := range args {
-			for _, id := range strings.Split(arg, ",") {
-				id = strings.TrimSpace(id)
-				if id != "" {
-					ids = append(ids, id)
-				}
-			}
-		}
+		ids := parseIDArgs(args)
 		if len(ids) == 0 {
 			output.PrintResult(nil, fmt.Errorf("at least one task ID is required"))
 			return nil
@@ -364,8 +406,7 @@ Pass one or more IDs separated by spaces or commas:
 			return nil
 		}
 
-		body := map[string][]string{"ids": ids}
-		_, err = c.Post("/api/ai_task/deleteTaskWithId", body)
+		_, err = c.Post("/api/ai_task/deleteTaskWithId", map[string][]string{"ids": ids})
 		if err != nil {
 			output.PrintResult(nil, err)
 			return nil
@@ -436,82 +477,37 @@ Examples:
 			return nil
 		}
 
-		params := map[string]string{
-			"enabled":  "1",
-			"pageSize": "100",
-			"field":    "updated_at",
-			"order":    "desc",
-			"source":   "all",
-		}
-
-		type chanResult struct {
-			data json.RawMessage
-			err  error
-		}
-
-		dbCh := make(chan chanResult, 1)
-		ragCh := make(chan chanResult, 1)
-
-		go func() {
-			d, e := c.Get("/api/ai_database/list", params)
-			dbCh <- chanResult{d, e}
-		}()
-		go func() {
-			d, e := c.Get("/api/ai_rag_sdk", params)
-			ragCh <- chanResult{d, e}
-		}()
-
-		dbRes := <-dbCh
-		ragRes := <-ragCh
-
-		if dbRes.err != nil {
-			output.PrintResult(nil, fmt.Errorf("failed to fetch databases: %w", dbRes.err))
-			return nil
-		}
-		if ragRes.err != nil {
-			output.PrintResult(nil, fmt.Errorf("failed to fetch RAGs: %w", ragRes.err))
-			return nil
-		}
-
-		var dbResult types.DatabaseListResponse
-		if err := json.Unmarshal(dbRes.data, &dbResult); err != nil {
-			output.PrintResult(nil, fmt.Errorf("failed to parse database list: %w", err))
-			return nil
-		}
-
-		var ragResult types.RagListResponse
-		if err := json.Unmarshal(ragRes.data, &ragResult); err != nil {
-			output.PrintResult(nil, fmt.Errorf("failed to parse RAG list: %w", err))
+		dbItems, ragItems, err := fetchEnabledContext(c)
+		if err != nil {
+			output.PrintResult(nil, err)
 			return nil
 		}
 
 		printer := output.NewPrinter(getOutputFormat())
 
 		if getOutputFormat() == output.FormatTable {
-			fmt.Printf("Enabled Databases (%d):\n", len(dbResult.Items))
-			dbRows := make([][]string, len(dbResult.Items))
-			for i, item := range dbResult.Items {
-				related := formatRelatedRags(item.RagList)
-				dbRows[i] = []string{item.ID, item.Name, item.Type, item.Source, related}
+			fmt.Printf("Enabled Databases (%d):\n", len(dbItems))
+			dbRows := make([][]string, len(dbItems))
+			for i, item := range dbItems {
+				dbRows[i] = []string{item.ID, item.Name, item.Type, item.Source, formatRelatedRags(item.RagList)}
 			}
 			printer.PrintTable([]string{"ID", "Name", "Type", "Source", "RelatedRAGs"}, dbRows)
 
-			fmt.Printf("\nEnabled RAGs (%d):\n", len(ragResult.Items))
-			ragRows := make([][]string, len(ragResult.Items))
-			for i, item := range ragResult.Items {
-				related := formatRelatedDBs(item.DatabaseList)
-				ragRows[i] = []string{item.ID, item.Name, item.Source, related}
+			fmt.Printf("\nEnabled RAGs (%d):\n", len(ragItems))
+			ragRows := make([][]string, len(ragItems))
+			for i, item := range ragItems {
+				ragRows[i] = []string{item.ID, item.Name, item.Source, formatRelatedDBs(item.DatabaseList)}
 			}
 			printer.PrintTable([]string{"ID", "Name", "Source", "RelatedDBs"}, ragRows)
 			return nil
 		}
 
 		return printer.PrintJSON(map[string]interface{}{
-			"databases": dbResult.Items,
-			"rags":      ragResult.Items,
+			"databases": dbItems,
+			"rags":      ragItems,
 			"summary": map[string]int{
-				"databases": len(dbResult.Items),
-				"rags":      len(ragResult.Items),
+				"databases": len(dbItems),
+				"rags":      len(ragItems),
 			},
 		})
 	},
@@ -554,48 +550,9 @@ func printContextSummary() {
 		return
 	}
 
-	params := map[string]string{
-		"enabled":  "1",
-		"pageSize": "100",
-		"field":    "updated_at",
-		"order":    "desc",
-		"source":   "all",
-	}
-
-	type fetchResult struct {
-		data json.RawMessage
-		err  error
-	}
-
-	dbCh := make(chan fetchResult, 1)
-	ragCh := make(chan fetchResult, 1)
-
-	go func() {
-		d, e := c.Get("/api/ai_database/list", params)
-		dbCh <- fetchResult{d, e}
-	}()
-	go func() {
-		d, e := c.Get("/api/ai_rag_sdk", params)
-		ragCh <- fetchResult{d, e}
-	}()
-
-	dbRes := <-dbCh
-	ragRes := <-ragCh
-
-	var dbItems []types.DatabaseItem
-	if dbRes.err == nil {
-		var dbResult types.DatabaseListResponse
-		if json.Unmarshal(dbRes.data, &dbResult) == nil {
-			dbItems = dbResult.Items
-		}
-	}
-
-	var ragItems []types.RagItem
-	if ragRes.err == nil {
-		var ragResult types.RagListResponse
-		if json.Unmarshal(ragRes.data, &ragResult) == nil {
-			ragItems = ragResult.Items
-		}
+	dbItems, ragItems, err := fetchEnabledContext(c)
+	if err != nil {
+		return
 	}
 
 	fmt.Println("\nCurrent Context:")
@@ -613,24 +570,24 @@ func printContextSummary() {
 		return
 	}
 
-	if len(dbItems) > 0 {
-		names := make([]string, len(dbItems))
-		for i, item := range dbItems {
-			names[i] = item.Name
+	printNameList := func(label string, names []string) {
+		if len(names) > 0 {
+			fmt.Printf("  %s: %d enabled (%s)\n", label, len(names), strings.Join(names, ", "))
+		} else {
+			fmt.Printf("  %s: none enabled\n", label)
 		}
-		fmt.Printf("  Databases: %d enabled (%s)\n", len(dbItems), strings.Join(names, ", "))
-	} else {
-		fmt.Println("  Databases: none enabled")
 	}
-	if len(ragItems) > 0 {
-		names := make([]string, len(ragItems))
-		for i, item := range ragItems {
-			names[i] = item.Name
-		}
-		fmt.Printf("  RAGs:      %d enabled (%s)\n", len(ragItems), strings.Join(names, ", "))
-	} else {
-		fmt.Println("  RAGs:      none enabled")
+
+	dbNames := make([]string, len(dbItems))
+	for i, item := range dbItems {
+		dbNames[i] = item.Name
 	}
+	ragNames := make([]string, len(ragItems))
+	for i, item := range ragItems {
+		ragNames[i] = item.Name
+	}
+	printNameList("Databases", dbNames)
+	printNameList("RAGs     ", ragNames)
 }
 
 // ---------------------------------------------------------------------------

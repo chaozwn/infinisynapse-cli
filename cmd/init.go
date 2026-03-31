@@ -60,7 +60,7 @@ Examples:
 		dir, _ := config.ConfigDir()
 		output.PrintSuccess("Configuration saved to %s/config.key", dir)
 		fmt.Printf("  server:           %s\n", server)
-		fmt.Printf("  api-key:          %s...%s\n", apiKey[:4], apiKey[len(apiKey)-4:])
+		fmt.Printf("  api-key:          %s\n", maskToken(apiKey))
 		fmt.Printf("  prefer-language:  %s\n", preferLang)
 		fmt.Printf("  console:          %s\n", consoleURL)
 		fmt.Printf("  user-id:          %s\n", userID)
