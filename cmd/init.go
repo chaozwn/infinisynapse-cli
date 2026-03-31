@@ -18,11 +18,11 @@ var initCmd = &cobra.Command{
 This writes a config file to ~/.agent_infini/config.key that will be used by all
 subsequent commands.
 
-Example:
+Examples:
   agent_infini init --api-key sk-xxx
   agent_infini init --server https://custom-server.example.com --api-key sk-xxx
   agent_infini init --api-key sk-xxx --prefer-language zh_CN
-  agent_infini init --api-key sk-xxx --console https://api.infinisynapse.cn/api/user/profile`,
+  agent_infini init --api-key sk-xxx --console https://api.infinisynapse.cn/api`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		server, _ := cmd.Flags().GetString("server")
 		apiKey, _ := cmd.Flags().GetString("api-key")
@@ -72,7 +72,7 @@ func init() {
 	initCmd.Flags().String("server", "https://app.infinisynapse.cn", "Server address")
 	initCmd.Flags().String("api-key", "", "API key for authentication (required)")
 	initCmd.Flags().String("prefer-language", "zh_CN", fmt.Sprintf("Preferred language (%s)", strings.Join(config.SupportedLanguages, ", ")))
-	initCmd.Flags().String("console", config.DefaultConsoleURL, "Console API base URL")
+	initCmd.Flags().String("console", config.DefaultConsoleURL, "Console API base URL (e.g. https://api.infinisynapse.cn/api)")
 	_ = initCmd.MarkFlagRequired("api-key")
 
 	rootCmd.AddCommand(initCmd)

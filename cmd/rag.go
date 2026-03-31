@@ -20,14 +20,15 @@ import (
 var ragCmd = &cobra.Command{
 	Use:   "rag",
 	Short: "Manage RAG knowledge bases",
-	Long: `Manage RAG (Retrieval-Augmented Generation) knowledge bases.
+	Long: `Manage RAG (Retrieval-Augmented Generation) knowledge bases that AI tasks
+can use for context-aware retrieval.
 
 List knowledge bases:
   agent_infini rag ls
   agent_infini rag ls --enabled
-  agent_infini rag ls --disabled
+  agent_infini rag ls --keyword sales
 
-Toggle knowledge bases:
+Toggle availability:
   agent_infini rag enable <id> [id...]
   agent_infini rag disable <id> [id...]`,
 }
@@ -39,7 +40,7 @@ Toggle knowledge bases:
 var ragListCmd = &cobra.Command{
 	Use:     "ls",
 	Aliases: []string{"list"},
-	Short:   "List RAG knowledge bases (paginated)",
+	Short:   "List registered RAG knowledge bases",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		c, err := client.New()
 		if err != nil {
@@ -118,10 +119,10 @@ var ragListCmd = &cobra.Command{
 
 var ragEnableCmd = &cobra.Command{
 	Use:   "enable <id> [id...]",
-	Short: "Enable one or more RAG knowledge bases",
-	Long: `Enable RAG knowledge bases so they are available for AI tasks.
+	Short: "Enable RAG knowledge bases for AI task access",
+	Long: `Mark RAG knowledge bases as available so AI tasks can retrieve context from them.
 
-Multiple IDs can be separated by commas or spaces:
+Pass one or more IDs separated by spaces or commas:
   agent_infini rag enable uuid-1 uuid-2
   agent_infini rag enable uuid-1,uuid-2`,
 	Args: cobra.MinimumNArgs(1),
@@ -141,10 +142,10 @@ Multiple IDs can be separated by commas or spaces:
 
 var ragDisableCmd = &cobra.Command{
 	Use:   "disable <id> [id...]",
-	Short: "Disable one or more RAG knowledge bases",
-	Long: `Disable RAG knowledge bases so they are not used by AI tasks.
+	Short: "Disable RAG knowledge bases from AI task access",
+	Long: `Mark RAG knowledge bases as unavailable so AI tasks will no longer retrieve context from them.
 
-Multiple IDs can be separated by commas or spaces:
+Pass one or more IDs separated by spaces or commas:
   agent_infini rag disable uuid-1 uuid-2
   agent_infini rag disable uuid-1,uuid-2`,
 	Args: cobra.MinimumNArgs(1),
@@ -193,9 +194,9 @@ func setRagEnabled(ids []string, enabled int) error {
 // ---------------------------------------------------------------------------
 
 func init() {
-	ragListCmd.Flags().Int("page", 1, "Page number")
-	ragListCmd.Flags().Int("page-size", 10, "Number of items per page")
-	ragListCmd.Flags().String("keyword", "", "Filter by name (case-insensitive)")
+	ragListCmd.Flags().Int("page", 1, "Page number (1-based)")
+	ragListCmd.Flags().Int("page-size", 10, "Items per page")
+	ragListCmd.Flags().String("keyword", "", "Filter by name (substring match, case-insensitive)")
 	ragListCmd.Flags().Bool("enabled", false, "Show only enabled RAGs")
 	ragListCmd.Flags().Bool("disabled", false, "Show only disabled RAGs")
 
