@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/chaozwn/infinisynapse-cli/internal/client"
+	"github.com/chaozwn/infinisynapse-cli/internal/config"
 	"github.com/chaozwn/infinisynapse-cli/internal/output"
 	"github.com/chaozwn/infinisynapse-cli/internal/task"
 	"github.com/chaozwn/infinisynapse-cli/internal/types"
@@ -526,6 +527,92 @@ func formatRelatedDBs(dbs []types.RelatedDatabase) string {
 	return strings.Join(parts, ", ")
 }
 
+func printContextSummary() {
+	config.Init()
+	c, err := client.New()
+	if err != nil {
+		return
+	}
+
+	params := map[string]string{
+		"enabled":  "1",
+		"pageSize": "100",
+		"field":    "updated_at",
+		"order":    "desc",
+		"source":   "all",
+	}
+
+	type fetchResult struct {
+		data json.RawMessage
+		err  error
+	}
+
+	dbCh := make(chan fetchResult, 1)
+	ragCh := make(chan fetchResult, 1)
+
+	go func() {
+		d, e := c.Get("/api/ai_database/list", params)
+		dbCh <- fetchResult{d, e}
+	}()
+	go func() {
+		d, e := c.Get("/api/ai_rag_sdk", params)
+		ragCh <- fetchResult{d, e}
+	}()
+
+	dbRes := <-dbCh
+	ragRes := <-ragCh
+
+	var dbItems []types.DatabaseItem
+	if dbRes.err == nil {
+		var dbResult types.DatabaseListResponse
+		if json.Unmarshal(dbRes.data, &dbResult) == nil {
+			dbItems = dbResult.Items
+		}
+	}
+
+	var ragItems []types.RagItem
+	if ragRes.err == nil {
+		var ragResult types.RagListResponse
+		if json.Unmarshal(ragRes.data, &ragResult) == nil {
+			ragItems = ragResult.Items
+		}
+	}
+
+	fmt.Println("\nCurrent Context:")
+
+	if getOutputFormat() == output.FormatJSON {
+		out, _ := json.MarshalIndent(map[string]interface{}{
+			"databases": dbItems,
+			"rags":      ragItems,
+			"summary": map[string]int{
+				"databases": len(dbItems),
+				"rags":      len(ragItems),
+			},
+		}, "", "  ")
+		fmt.Println(string(out))
+		return
+	}
+
+	if len(dbItems) > 0 {
+		names := make([]string, len(dbItems))
+		for i, item := range dbItems {
+			names[i] = item.Name
+		}
+		fmt.Printf("  Databases: %d enabled (%s)\n", len(dbItems), strings.Join(names, ", "))
+	} else {
+		fmt.Println("  Databases: none enabled")
+	}
+	if len(ragItems) > 0 {
+		names := make([]string, len(ragItems))
+		for i, item := range ragItems {
+			names[i] = item.Name
+		}
+		fmt.Printf("  RAGs:      %d enabled (%s)\n", len(ragItems), strings.Join(names, ", "))
+	} else {
+		fmt.Println("  RAGs:      none enabled")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // task file
 // ---------------------------------------------------------------------------
@@ -666,6 +753,12 @@ Examples:
 // ---------------------------------------------------------------------------
 
 func init() {
+	defaultHelp := taskCmd.HelpFunc()
+	taskCmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
+		defaultHelp(cmd, args)
+		printContextSummary()
+	})
+
 	taskNewCmd.Flags().StringP("query", "q", "", "Initial message/query")
 	taskAskCmd.Flags().StringP("query", "q", "", "Message to continue the conversation")
 
