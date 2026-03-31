@@ -92,23 +92,22 @@ func enrichStreamResult(result *task.StreamResult) map[string]interface{} {
 
 var taskCmd = &cobra.Command{
 	Use:   "task",
-	Short: "Manage tasks and chat",
-	Long: `Manage tasks for multi-turn chat conversations.
+	Short: "Create and manage multi-turn AI task conversations",
+	Long: `Create and manage multi-turn AI task conversations.
 
-Create a new task:
+Before creating a task, verify that the required databases and RAGs are enabled:
+  agent_infini task context
+
+Conversation:
   agent_infini task new "Analyze sales data"
-
-Continue a conversation:
   agent_infini task ask <taskId> "Focus on revenue"
 
 Manage tasks:
   agent_infini task ls
+  agent_infini task ls --search "sales"
   agent_infini task show <taskId>
-  agent_infini task rm <taskId>
   agent_infini task cancel <taskId>
-
-View enabled resources:
-  agent_infini task context
+  agent_infini task rm <taskId>
 
 Workspace files:
   agent_infini task file <taskId>
@@ -122,8 +121,9 @@ Workspace files:
 
 var taskNewCmd = &cobra.Command{
 	Use:   "new [query]",
-	Short: "Create a new task",
-	Long: `Send a newTask request to the server and stream the response.
+	Short: "Create a new AI task and stream the response",
+	Long: `Create a new AI task with an initial query. The server processes the request
+and streams the response in real time.
 
 Examples:
   agent_infini task new "Analyze sales data"
@@ -156,7 +156,8 @@ Examples:
 var taskAskCmd = &cobra.Command{
 	Use:   "ask <taskId> [query]",
 	Short: "Continue a conversation in an existing task",
-	Long: `Send an askResponse to continue the conversation in an existing task.
+	Long: `Send a follow-up message to an existing task and stream the response.
+Use this for multi-turn analysis where each message builds on prior context.
 
 Examples:
   agent_infini task ask <taskId> "Focus on revenue"
@@ -191,7 +192,7 @@ Examples:
 var taskListCmd = &cobra.Command{
 	Use:     "ls",
 	Aliases: []string{"list"},
-	Short:   "List tasks (paginated)",
+	Short:   "List tasks with pagination and search",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		c, err := client.New()
 		if err != nil {
@@ -235,8 +236,8 @@ var taskListCmd = &cobra.Command{
 // ---------------------------------------------------------------------------
 
 var taskShowCmd = &cobra.Command{
-	Use:   "show [taskId]",
-	Short: "Show task details",
+	Use:   "show <taskId>",
+	Short: "Show task details, last message, and workspace files",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		c, err := client.New()
@@ -318,12 +319,12 @@ var taskShowCmd = &cobra.Command{
 
 var taskRemoveCmd = &cobra.Command{
 	Use:   "rm <taskId>[,taskId...]",
-	Short: "Delete one or more tasks (comma or space separated)",
-	Long: `Delete one or more tasks by ID.
+	Short: "Delete one or more tasks",
+	Long: `Permanently delete tasks by ID.
 
-Multiple IDs can be separated by commas or spaces:
-  agent_infini task rm id1,id2,id3
-  agent_infini task rm id1 id2 id3`,
+Pass one or more IDs separated by spaces or commas:
+  agent_infini task rm id1 id2 id3
+  agent_infini task rm id1,id2,id3`,
 	Aliases: []string{"delete", "remove"},
 	Args:    cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -365,7 +366,7 @@ Multiple IDs can be separated by commas or spaces:
 
 var taskCancelCmd = &cobra.Command{
 	Use:   "cancel <taskId>",
-	Short: "Cancel a running task",
+	Short: "Cancel a running task immediately",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		taskID := args[0]
@@ -402,9 +403,13 @@ var taskCancelCmd = &cobra.Command{
 var taskContextCmd = &cobra.Command{
 	Use:     "context",
 	Aliases: []string{"ctx"},
-	Short:   "Show enabled databases and RAGs for tasks",
-	Long: `Display all currently enabled databases and RAG knowledge bases,
-along with their related resources and actual enabled status.
+	Short:   "Show enabled databases and RAGs available for tasks",
+	Long: `Display all currently enabled databases and RAG knowledge bases.
+Run this before creating a task to verify the required data sources are active.
+
+If a resource is missing, enable it with:
+  agent_infini db enable <id>
+  agent_infini rag enable <id>
 
 Examples:
   agent_infini task context
@@ -619,8 +624,8 @@ func printContextSummary() {
 
 var taskFileCmd = &cobra.Command{
 	Use:   "file <taskId>",
-	Short: "List workspace files for a task",
-	Long: `Show all files in the workspace of a task.
+	Short: "List files generated in a task workspace",
+	Long: `Show all files in the workspace of a task (e.g. scripts, reports, exports).
 
 Examples:
   agent_infini task file <taskId>`,
@@ -648,11 +653,12 @@ Examples:
 
 var taskPreviewCmd = &cobra.Command{
 	Use:   "preview <taskId> <fileName>",
-	Short: "Preview a workspace file content",
-	Long: `Display the content of a workspace file to stdout.
+	Short: "Preview a workspace file to stdout",
+	Long: `Display the content of a workspace file directly to stdout without downloading.
 
 Examples:
-  agent_infini task preview <taskId> test_file.txt`,
+  agent_infini task preview <taskId> analysis.py
+  agent_infini task preview <taskId> result.csv`,
 	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		taskID := args[0]
@@ -694,7 +700,8 @@ Examples:
 var taskDownloadCmd = &cobra.Command{
 	Use:   "download <taskId> <fileName>",
 	Short: "Download a workspace file to local disk",
-	Long: `Download a file from the task workspace to the local disk.
+	Long: `Download a file from the task workspace and save it locally.
+Defaults to the current directory; use -o to specify a different path.
 
 Examples:
   agent_infini task download <taskId> report.csv
@@ -759,14 +766,14 @@ func init() {
 		printContextSummary()
 	})
 
-	taskNewCmd.Flags().StringP("query", "q", "", "Initial message/query")
-	taskAskCmd.Flags().StringP("query", "q", "", "Message to continue the conversation")
+	taskNewCmd.Flags().StringP("query", "q", "", "Initial query (alternative to positional arg)")
+	taskAskCmd.Flags().StringP("query", "q", "", "Follow-up message (alternative to positional arg)")
 
-	taskListCmd.Flags().Int("page", 1, "Page number")
-	taskListCmd.Flags().Int("page-size", 10, "Number of items per page")
-	taskListCmd.Flags().String("search", "", "Search tasks by name")
+	taskListCmd.Flags().Int("page", 1, "Page number (1-based)")
+	taskListCmd.Flags().Int("page-size", 10, "Items per page")
+	taskListCmd.Flags().String("search", "", "Filter by task name (substring match)")
 
-	taskDownloadCmd.Flags().StringP("output", "o", ".", "Output file path or directory")
+	taskDownloadCmd.Flags().StringP("output", "o", ".", "Destination path or directory")
 
 	taskCmd.AddCommand(taskNewCmd)
 	taskCmd.AddCommand(taskAskCmd)

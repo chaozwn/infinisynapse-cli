@@ -10,11 +10,15 @@ import (
 )
 
 var (
-	jsonOutput bool
-	showSkill  bool
+	jsonOutput  bool
+	tableOutput bool
+	showSkill   bool
 )
 
 func getOutputFormat() output.Format {
+	if tableOutput {
+		return output.FormatTable
+	}
 	if jsonOutput {
 		return output.FormatJSON
 	}
@@ -79,7 +83,7 @@ Key features:
   - Database connection management (list, enable, disable)
   - RAG knowledge base management (list, enable, disable)
   - Workspace file operations (list, preview, download)
-  - Unified JSON / table output for pipeline composability
+  - Unified output: JSON (default) or table (--table), ideal for pipelines
 
 Quick start:
   1. Initialize:      agent_infini init --api-key <your-key>
@@ -121,7 +125,9 @@ Use 'agent_infini [command] --help' for details on a specific command.`,
 func init() {
 	rootCmd.Version = Version
 	rootCmd.PersistentFlags().BoolVar(&jsonOutput, "json", false,
-		"Force JSON output: {success, data, error}")
+		"Force JSON output: {success, data, error} (default)")
+	rootCmd.PersistentFlags().BoolVar(&tableOutput, "table", false,
+		"Force table output for list commands")
 	rootCmd.Flags().BoolVar(&showSkill, "skill", false,
 		"Show the full AI agent command specification")
 
