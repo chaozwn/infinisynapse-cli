@@ -19,15 +19,19 @@ import (
 
 var dbCmd = &cobra.Command{
 	Use:   "db",
-	Short: "Manage databases",
-	Long: `Manage database connections for AI tasks.
+	Short: "Manage database connections",
+	Long: `Manage database connections that AI tasks can query against.
 
-List databases:
+List connections:
   agent_infini db ls
   agent_infini db ls --enabled
-  agent_infini db ls --disabled
+  agent_infini db ls --type postgres
 
-Toggle databases:
+Supported database types:
+  mysql, postgres, sqlite, sqlserver, clickhouse, snowflake,
+  doris, starrocks, gbase, kingbase, dm, supabase, deltalake, file
+
+Toggle availability:
   agent_infini db enable <id> [id...]
   agent_infini db disable <id> [id...]`,
 }
@@ -39,7 +43,7 @@ Toggle databases:
 var dbListCmd = &cobra.Command{
 	Use:     "ls",
 	Aliases: []string{"list"},
-	Short:   "List databases (paginated)",
+	Short:   "List registered database connections",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		c, err := client.New()
 		if err != nil {
@@ -123,10 +127,10 @@ var dbListCmd = &cobra.Command{
 
 var dbEnableCmd = &cobra.Command{
 	Use:   "enable <id> [id...]",
-	Short: "Enable one or more databases",
-	Long: `Enable databases so they are available for AI tasks.
+	Short: "Enable databases for AI task access",
+	Long: `Mark databases as available so AI tasks can execute queries against them.
 
-Multiple IDs can be separated by commas or spaces:
+Pass one or more IDs separated by spaces or commas:
   agent_infini db enable id1 id2 id3
   agent_infini db enable id1,id2,id3`,
 	Args: cobra.MinimumNArgs(1),
@@ -146,10 +150,10 @@ Multiple IDs can be separated by commas or spaces:
 
 var dbDisableCmd = &cobra.Command{
 	Use:   "disable <id> [id...]",
-	Short: "Disable one or more databases",
-	Long: `Disable databases so they are not used by AI tasks.
+	Short: "Disable databases from AI task access",
+	Long: `Mark databases as unavailable so AI tasks will no longer query them.
 
-Multiple IDs can be separated by commas or spaces:
+Pass one or more IDs separated by spaces or commas:
   agent_infini db disable id1 id2 id3
   agent_infini db disable id1,id2,id3`,
 	Args: cobra.MinimumNArgs(1),
@@ -218,10 +222,10 @@ func truncate(s string, maxLen int) string {
 // ---------------------------------------------------------------------------
 
 func init() {
-	dbListCmd.Flags().Int("page", 1, "Page number")
-	dbListCmd.Flags().Int("page-size", 10, "Number of items per page")
-	dbListCmd.Flags().String("name", "", "Filter by database name")
-	dbListCmd.Flags().String("type", "", "Filter by database type (mysql, postgres, ...)")
+	dbListCmd.Flags().Int("page", 1, "Page number (1-based)")
+	dbListCmd.Flags().Int("page-size", 10, "Items per page")
+	dbListCmd.Flags().String("name", "", "Filter by name (substring match)")
+	dbListCmd.Flags().String("type", "", "Filter by type: mysql|postgres|sqlite|sqlserver|clickhouse|snowflake|doris|starrocks|gbase|kingbase|dm|supabase|deltalake|file")
 	dbListCmd.Flags().Bool("enabled", false, "Show only enabled databases")
 	dbListCmd.Flags().Bool("disabled", false, "Show only disabled databases")
 
