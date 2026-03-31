@@ -88,7 +88,7 @@ var dbListCmd = &cobra.Command{
 		printer := output.NewPrinter(getOutputFormat())
 		return printer.Print(
 			result,
-			[]string{"ID", "Name", "Type", "Enabled", "Source", "Description"},
+			[]string{"ID", "Name", "Type", "Enabled", "Source", "RelatedRAGs", "Description"},
 			func(v interface{}) [][]string {
 				r := v.(types.DatabaseListResponse)
 				rows := make([][]string, len(r.Items))
@@ -97,12 +97,17 @@ var dbListCmd = &cobra.Command{
 					if item.Enabled == 1 {
 						enabledStr = "yes"
 					}
+					ragNames := make([]string, len(item.RagList))
+					for j, rag := range item.RagList {
+						ragNames[j] = rag.Name
+					}
 					rows[i] = []string{
 						item.ID,
 						item.Name,
 						item.Type,
 						enabledStr,
 						item.Source,
+						strings.Join(ragNames, ", "),
 						truncate(item.Description, 40),
 					}
 				}

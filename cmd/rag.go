@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/chaozwn/infinisynapse-cli/internal/client"
 	"github.com/chaozwn/infinisynapse-cli/internal/output"
@@ -83,7 +84,7 @@ var ragListCmd = &cobra.Command{
 		printer := output.NewPrinter(getOutputFormat())
 		return printer.Print(
 			result,
-			[]string{"ID", "Name", "Enabled", "Source", "Description"},
+			[]string{"ID", "Name", "Enabled", "Source", "RelatedDBs", "Description"},
 			func(v interface{}) [][]string {
 				r := v.(types.RagListResponse)
 				rows := make([][]string, len(r.Items))
@@ -92,11 +93,16 @@ var ragListCmd = &cobra.Command{
 					if item.Enabled == 1 {
 						enabledStr = "yes"
 					}
+					dbNames := make([]string, len(item.DatabaseList))
+					for j, db := range item.DatabaseList {
+						dbNames[j] = db.Name
+					}
 					rows[i] = []string{
 						item.ID,
 						item.Name,
 						enabledStr,
 						item.Source,
+						strings.Join(dbNames, ", "),
 						truncate(item.Description, 40),
 					}
 				}
