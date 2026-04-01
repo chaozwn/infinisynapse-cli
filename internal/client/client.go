@@ -40,10 +40,10 @@ func NewWithOverrides(server, token string) (*Client, error) {
 		token = config.GetToken()
 	}
 	if server == "" {
-		return nil, fmt.Errorf("server not configured. Run 'agent_infini init --api-key <key>' or create ~/.agent_infini/config.key")
+		return nil, fmt.Errorf("server not configured. Run 'agent_infini init --api-key <key>' or create ~/.agent_infini/config.txt")
 	}
 	if token == "" {
-		return nil, fmt.Errorf("api-key not configured. Run 'agent_infini init --api-key <key>' or create ~/.agent_infini/config.key")
+		return nil, fmt.Errorf("api-key not configured. Run 'agent_infini init --api-key <key>' or create ~/.agent_infini/config.txt")
 	}
 
 	return &Client{
@@ -110,7 +110,7 @@ func (c *Client) Do(method, path string, body interface{}) (json.RawMessage, err
 
 	if apiResp.Code != 200 {
 		if apiResp.Code == 1101 || apiResp.Code == 1105 {
-			return nil, fmt.Errorf("token expired or invalid (code: %d). Update api-key in ~/.agent_infini/config.key", apiResp.Code)
+			return nil, fmt.Errorf("token expired or invalid (code: %d). Update api-key in ~/.agent_infini/config.txt", apiResp.Code)
 		}
 		return nil, fmt.Errorf("API error (code: %d): %s", apiResp.Code, apiResp.Message)
 	}

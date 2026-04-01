@@ -57,7 +57,7 @@ make cross
 ## 快速开始
 
 ```bash
-# 1. 初始化配置（服务器、API key、语言偏好，写入 ~/.agent_infini/config.key）
+# 1. 初始化配置（服务器、API key、语言偏好，写入 ~/.agent_infini/config.txt）
 agent_infini init --api-key sk-xxx
 
 # 2. 查看可用资源
@@ -117,7 +117,7 @@ infinisynapse-cli/
 
 ### 初始化 `agent_infini init`
 
-写入 `~/.agent_infini/config.key`（服务器地址、API key、偏好语言、Console URL）。初始化时会自动获取用户 ID。
+写入 `~/.agent_infini/config.txt`（服务器地址、API key、偏好语言、Console URL）。初始化时会自动获取用户 ID。
 
 ```bash
 agent_infini init --api-key sk-xxx
@@ -253,7 +253,7 @@ agent_infini task ls | jq '.items[].task_name'
 
 ## 配置文件
 
-首次执行 `agent_infini init` 后，配置保存在 `~/.agent_infini/config.key`：
+首次执行 `agent_infini init` 后，配置保存在 `~/.agent_infini/config.txt`：
 
 ```yaml
 global:
@@ -271,7 +271,7 @@ global:
 
 1. `<binary_dir>/agent_infini.key` — 二进制同目录 YAML
 2. `<binary_dir>/<filename>.key` — 兼容路径
-3. `~/.agent_infini/config.key` — 用户目录 YAML（推荐）
+3. `~/.agent_infini/config.txt` — 用户目录 YAML（推荐）
 4. `~/.agent_infini/config.json` — 用户目录 JSON
 
 支持语言：`en`, `zh_CN`, `ar`, `ja`, `ko`, `ru`

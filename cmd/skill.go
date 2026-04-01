@@ -17,8 +17,8 @@ AI Agent Recommended Workflow
 Step 1 — First-time setup (run once):
   agent_infini init --api-key "your_api_key"
 
-  Or manually create ~/.agent_infini/config.key:
-  mkdir -p ~/.agent_infini && cat > ~/.agent_infini/config.key << 'EOF'
+  Or manually create ~/.agent_infini/config.txt:
+  mkdir -p ~/.agent_infini && cat > ~/.agent_infini/config.txt << 'EOF'
   global:
     server: "https://app.infinisynapse.cn"
     api-key: "your_api_key"
@@ -147,7 +147,7 @@ JSON mode (default, or --json to override config):
   {"success": true, "data": { ... }}
   {"success": false, "error": "error message"}
 
-Table mode (--table, or default-output: "table" in config.key):
+Table mode (--table, or default-output: "table" in config.txt):
   Formatted table for list commands, JSON for detail commands.
 
 Priority: --table > --json > config default-output > json
@@ -156,7 +156,7 @@ Priority: --table > --json > config default-output > json
 Error Handling
 ================================================================================
 
-  - Token expired:        Update api-key via 'agent_infini init' or edit ~/.agent_infini/config.key
+  - Token expired:        Update api-key via 'agent_infini init' or edit ~/.agent_infini/config.txt
   - Server unreachable:   Check --server URL and network connectivity
   - Task not found:       Use 'task ls' to find valid task IDs
   - No enabled resources: Use 'task context' to check, then 'db enable' or 'rag enable'
@@ -170,14 +170,14 @@ Configuration is loaded from the first file found in this order
 
   1. <binary_dir>/agent_infini.key          (tool_basename.key, YAML)
   2. <binary_dir>/<filename>.key            (tool_filename.key, compat)
-  3. ~/.agent_infini/config.key             (YAML, recommended)
+  3. ~/.agent_infini/config.txt             (YAML, recommended)
   4. ~/.agent_infini/config.json            (JSON)
 
-The most common approach: run 'agent_infini init' or create ~/.agent_infini/config.key.
-config.key and config.json are alternatives; if config.key exists, config.json
+The most common approach: run 'agent_infini init' or create ~/.agent_infini/config.txt.
+config.txt and config.json are alternatives; if config.txt exists, config.json
 is not checked.
 
-config.key format (YAML):
+config.txt format (YAML):
   global:
     server: "https://app.infinisynapse.cn"
     api-key: "your_api_key"
@@ -197,7 +197,7 @@ config.json format (JSON):
 Supported languages: en, zh_CN, ar, ja, ko, ru
 
 WinClaw Marketplace:
-  The executor reads config.key and injects credentials as global CLI flags
+  The executor reads config.txt and injects credentials as global CLI flags
   (--api-key, --server, --console, etc.) automatically. These flags are accepted
   by all commands and override the corresponding config file values.
   Help commands (--help, --skill) do not receive injected parameters.

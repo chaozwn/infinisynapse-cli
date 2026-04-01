@@ -15,7 +15,7 @@ var initCmd = &cobra.Command{
 	Short: "Initialize CLI configuration",
 	Long: `Initialize the agent_infini CLI by providing the server address and API key.
 
-This writes a config file to ~/.agent_infini/config.key that will be used by all
+This writes a config file to ~/.agent_infini/config.txt that will be used by all
 subsequent commands.
 
 Examples:
@@ -71,7 +71,7 @@ Examples:
 		}
 
 		dir, _ := config.ConfigDir()
-		output.PrintSuccess("Configuration saved to %s/config.key", dir)
+		output.PrintSuccess("Configuration saved to %s/config.txt", dir)
 		fmt.Printf("  server:           %s\n", server)
 		fmt.Printf("  api-key:          %s\n", maskToken(apiKey))
 		fmt.Printf("  prefer-language:  %s\n", preferLang)

@@ -31,7 +31,7 @@ var defaults = map[string]string{
 	KeyConsole:        DefaultConsoleURL,
 }
 
-// configFile mirrors the WinClaw config.key / config.json structure.
+// configFile mirrors the WinClaw config.txt / config.json structure.
 type configFile struct {
 	Global map[string]string `yaml:"global" json:"global"`
 }
@@ -48,7 +48,7 @@ type candidate struct {
 // Lookup order (per execute_external_tool_resolver.py):
 //  1. <binary_dir>/<tool_basename>.key
 //  2. <binary_dir>/<tool_filename>.key  (compat, only when filename differs)
-//  3. ~/.<tool_basename>/config.key     (YAML)
+//  3. ~/.<tool_basename>/config.txt     (YAML)
 //  4. ~/.<tool_basename>/config.json    (JSON)
 func Init() error {
 	home, err := os.UserHomeDir()
@@ -105,11 +105,11 @@ func buildCandidates(home string) []candidate {
 		}
 	}
 
-	// 3. ~/.<tool_basename>/config.key
+	// 3. ~/.<tool_basename>/config.txt
 	// 4. ~/.<tool_basename>/config.json
 	iscDir := filepath.Join(home, "."+toolName)
 	out = append(out,
-		candidate{path: filepath.Join(iscDir, "config.key"), format: "yaml"},
+		candidate{path: filepath.Join(iscDir, "config.txt"), format: "yaml"},
 		candidate{path: filepath.Join(iscDir, "config.json"), format: "json"},
 	)
 	return out
@@ -144,7 +144,7 @@ func Save(values map[string]string) error {
 		return fmt.Errorf("cannot marshal config: %w", err)
 	}
 
-	path := filepath.Join(dir, "config.key")
+	path := filepath.Join(dir, "config.txt")
 	if err := os.WriteFile(path, data, 0o600); err != nil {
 		return fmt.Errorf("cannot write config file: %w", err)
 	}
