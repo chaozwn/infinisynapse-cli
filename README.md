@@ -39,6 +39,34 @@ make clean     # 清理构建产物
 make help      # 查看所有可用命令
 ```
 
+### 发布到 WinClaw 工具市场
+
+发布脚本位于 `scripts/wincalw-market/`，会构建多平台二进制、生成压缩包、`checksums.txt` 和 `manifest.json`。默认发布产物目录为 `scripts/wincalw-market/releases/`。
+
+```bash
+cd scripts/wincalw-market
+node release.mjs
+```
+
+如需上传到工具市场存储，先安装发布依赖，再执行发布：
+
+```bash
+cd scripts/wincalw-market
+npm install
+npm run release -- --publish
+```
+
+常用发布选项：
+
+```bash
+npm run release -- --dry-run
+npm run release -- --publish --provider oss
+npm run release -- --publish --provider blob --no-bump
+npm run release -- --publish --skip-build
+```
+
+发布脚本会上传各平台二进制到 `tools/<os>/<arch>/agent_infini`，并更新 `tools/manifest.json` 中的 `agent_infini` 版本。版本号记录在 `scripts/wincalw-market/VERSION`，默认按 patch 自动递增；可用 `--bump minor|major|none` 或 `--version vX.Y.Z` 覆盖。
+
 ### 版本号管理
 
 构建时版本号自动从 git tag 获取，无 tag 时默认为 `0.1.0`。发布新版本时打 tag 即可：

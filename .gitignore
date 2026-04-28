@@ -29,6 +29,8 @@ Thumbs.db
 # Build
 dist/
 build/
+scripts/wincalw-market/node_modules/
+scripts/wincalw-market/releases/
 
 .auto-coder/
 /actions/
