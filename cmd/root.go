@@ -156,8 +156,8 @@ func init() {
 
 	pf := rootCmd.PersistentFlags()
 	pf.String("api-key", "", "API key (auto-injected by WinClaw executor)")
-	pf.String("server", "", "Server address override")
-	pf.String("console", "", "Console API base URL override")
+	pf.String("server", "", "Business API base URL override for task/db/rag commands")
+	pf.String("console", "", "Console API base URL override for init /user/profile lookup")
 	pf.String("prefer-language", "", "Preferred language override")
 	pf.String("default-output", "", "Default output format override (json|table)")
 

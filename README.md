@@ -145,11 +145,14 @@ infinisynapse-cli/
 
 ### 初始化 `agent_infini init`
 
-写入 `~/.agent_infini/config.txt`（服务器地址、API key、偏好语言、Console URL）。初始化时会自动获取用户 ID。
+写入 `~/.agent_infini/config.txt`（服务器地址、API key、偏好语言、Console URL）。初始化时会通过 Console API 的 `/user/profile` 自动获取用户 ID。
+
+`--server` 用于后续任务、数据库、RAG 等业务 API；`--console` 用于初始化时获取用户信息。本地开发时通常需要同时传这两个地址。
 
 ```bash
 agent_infini init --api-key sk-xxx
 agent_infini init --server https://custom-server.example.com --api-key sk-xxx
+agent_infini init --api-key sk-xxx --server http://localhost:8088 --console http://localhost:3000/api
 agent_infini init --api-key sk-xxx --prefer-language zh_CN
 agent_infini init --api-key sk-xxx --console https://api.infinisynapse.cn/api
 ```
@@ -256,8 +259,8 @@ agent_infini version
 | `--version`, `-v` | 显示版本号 |
 | `--help`, `-h` | 显示帮助信息 |
 | `--api-key` | 覆盖配置中的 API key |
-| `--server` | 覆盖配置中的服务器地址 |
-| `--console` | 覆盖配置中的 Console API URL |
+| `--server` | 覆盖业务 API 地址，用于任务、数据库、RAG 等命令 |
+| `--console` | 覆盖 Console API 地址，`init` 会用它请求 `/user/profile` |
 | `--prefer-language` | 覆盖配置中的偏好语言 |
 | `--default-output` | 覆盖默认输出格式（`json` \| `table`） |
 

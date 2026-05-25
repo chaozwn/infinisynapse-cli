@@ -18,12 +18,21 @@ var initCmd = &cobra.Command{
 This writes a config file to ~/.agent_infini/config.txt that will be used by all
 subsequent commands.
 
+agent_infini uses two base URLs:
+  --server   Business API base URL used by task, db, and rag commands.
+  --console  Console API base URL used by init to call /user/profile.
+
+For local development, pass both --server and --console.
+
 Examples:
   agent_infini init --api-key sk-xxx
   agent_infini init --server https://custom-server.example.com --api-key sk-xxx
+  agent_infini init --api-key sk-xxx --server http://localhost:8088 --console http://localhost:3000/api
   agent_infini init --api-key sk-xxx --prefer-language zh_CN
-  agent_infini init --api-key sk-xxx --console https://api.infinisynapse.cn/api`,
+  agent_infini init --api-key sk-xxx --server http://app.infinisynapse.cn --console https://api.infinisynapse.cn/api`,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		cmd.SilenceUsage = false
+
 		server, _ := cmd.Flags().GetString("server")
 		apiKey, _ := cmd.Flags().GetString("api-key")
 		preferLang, _ := cmd.Flags().GetString("prefer-language")
@@ -53,9 +62,17 @@ Examples:
 			return fmt.Errorf("unsupported language %q, supported: %s", preferLang, strings.Join(config.SupportedLanguages, ", "))
 		}
 
+		cmd.SilenceUsage = true
+
 		userID, err := client.FetchUserID(consoleURL, apiKey)
 		if err != nil {
-			return fmt.Errorf("failed to fetch user profile: %w", err)
+			return fmt.Errorf(`failed to fetch user profile with console URL %s: %w
+
+Hint:
+  --server is used for task, database, and RAG APIs.
+  --console is used by init to call /user/profile.
+  For local development, pass both URLs, for example:
+    agent_infini init --api-key sk-xxx --server http://localhost:8088 --console http://localhost:3000/api`, consoleURL, err)
 		}
 
 		values := map[string]string{
