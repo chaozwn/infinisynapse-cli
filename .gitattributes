@@ -1,0 +1,4 @@
+# Shell scripts must always use LF, even when edited on Windows,
+# otherwise `curl ... | sh` fails on macOS/Linux with CRLF errors.
+*.sh text eol=lf
+scripts/install/SKILL.md text eol=lf

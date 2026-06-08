@@ -153,6 +153,10 @@ func init() {
 		"Force table output for list commands")
 	rootCmd.Flags().BoolVar(&showSkill, "skill", false,
 		"Show the full AI agent command specification")
+	rootCmd.Flags().BoolVar(&updateFlag, "update", false,
+		"Update agent_infini to the latest version")
+	rootCmd.Flags().BoolVar(&updateCheckFlag, "check", false,
+		"With --update: only check for a newer version, do not install")
 
 	pf := rootCmd.PersistentFlags()
 	pf.String("api-key", "", "API key (auto-injected by WinClaw executor)")
@@ -169,6 +173,12 @@ func init() {
 }
 
 func Execute() error {
+	if handled, code := handleUpdateFlag(os.Args[1:]); handled {
+		if code != 0 {
+			os.Exit(code)
+		}
+		return nil
+	}
 	for i := 1; i < len(os.Args); i++ {
 		if os.Args[i] == "--skill" && i == 1 {
 			fmt.Print(skillSpec)

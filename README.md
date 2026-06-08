@@ -67,6 +67,13 @@ npm run release -- --publish --skip-build
 
 发布脚本会上传各平台二进制到 `tools/<os>/<arch>/agent_infini`，并更新 `tools/manifest.json` 中的 `agent_infini` 版本。版本号记录在 `scripts/wincalw-market/VERSION`，默认按 patch 自动递增；可用 `--bump minor|major|none` 或 `--version vX.Y.Z` 覆盖。
 
+同时，发布脚本会为 CLI 自动更新（`agent_infini --update`）额外上传：
+
+- 各平台二进制：`plugins/infini_cli/<平台>/<版本>/agent_infini[.exe]`
+- 版本清单：`plugins/infini_cli/manifest.json`（含 `version` 与各平台 `sha256`、`size`）
+
+该路径位于存储桶根目录（不带 `OSS_PREFIX`），与安装脚本下载路径保持一致。
+
 ### 版本号管理
 
 构建时版本号自动从 git tag 获取，无 tag 时默认为 `0.1.0`。发布新版本时打 tag 即可：
@@ -249,6 +256,27 @@ agent_infini version
 
 输出版本号、Commit、构建时间、Go 版本和操作系统架构。
 
+### 自动更新 `agent_infini --update`
+
+```bash
+agent_infini --update            # 检查并更新到最新版本
+agent_infini --update --check    # 仅检查是否有新版本，不下载安装
+```
+
+更新流程：
+
+1. 读取版本清单 `https://infinisynapse.oss-cn-shanghai.aliyuncs.com/plugins/infini_cli/manifest.json`。
+2. 与当前版本比较，若已是最新则直接退出。
+3. 按当前平台下载对应二进制（`plugins/infini_cli/<平台>/<版本>/agent_infini[.exe]`）。
+4. 校验 SHA256 后原子替换当前可执行文件。
+
+平台目录约定与安装脚本一致：`darwin-arm64`、`darwin-x64`、`linux-x64`、`linux-arm64`、`win32-x64`。
+
+- macOS / Linux：备份原文件为 `.old` 后原子替换，失败自动回滚；macOS 会清除 quarantine 属性。
+- Windows：运行中的 `.exe` 无法直接覆盖，更新会启动一个后台脚本，在当前进程退出后完成替换。重新打开终端运行 `agent_infini version` 验证即可。
+
+> 版本清单由发布脚本 `scripts/wincalw-market/release.mjs` 在 `--publish` 时自动生成并上传，见「发布到 WinClaw 工具市场」。
+
 ## 全局 Flag
 
 | Flag | 说明 |
@@ -256,6 +284,7 @@ agent_infini version
 | `--json` | 强制 JSON 输出（默认） |
 | `--table` | 强制表格输出 |
 | `--skill` | 显示 AI Agent 规范 |
+| `--update` | 更新到最新版本（配合 `--check` 仅检查） |
 | `--version`, `-v` | 显示版本号 |
 | `--help`, `-h` | 显示帮助信息 |
 | `--api-key` | 覆盖配置中的 API key |

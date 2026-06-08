@@ -15,14 +15,19 @@ const repoRoot = path.resolve(projectDir, "..", "..");
 const versionFile = path.join(projectDir, "VERSION");
 const modulePath = "github.com/chaozwn/infinisynapse-cli";
 
+// `installDir` matches the platform directory used by the install scripts and
+// the CLI self-update manifest (plugins/infini_cli/<installDir>/<version>/...).
+// Windows ARM64 reuses the x64 binary, so it has no dedicated installDir.
 const platforms = [
-  { name: "windows", goos: "windows", goarch: "amd64", os: "windows", arch: "x64", archive: "zip" },
-  { name: "windows-arm64", goos: "windows", goarch: "arm64", os: "windows", arch: "arm64", archive: "zip" },
-  { name: "mac-arm64", goos: "darwin", goarch: "arm64", os: "mac", arch: "arm64", archive: "tar.gz" },
-  { name: "mac-x64", goos: "darwin", goarch: "amd64", os: "mac", arch: "x64", archive: "tar.gz" },
-  { name: "linux", goos: "linux", goarch: "amd64", os: "linux", arch: "x64", archive: "tar.gz" },
-  { name: "linux-arm64", goos: "linux", goarch: "arm64", os: "linux", arch: "arm64", archive: "tar.gz" },
+  { name: "windows", goos: "windows", goarch: "amd64", os: "windows", arch: "x64", archive: "zip", installDir: "win32-x64" },
+  { name: "windows-arm64", goos: "windows", goarch: "arm64", os: "windows", arch: "arm64", archive: "zip", installDir: null },
+  { name: "mac-arm64", goos: "darwin", goarch: "arm64", os: "mac", arch: "arm64", archive: "tar.gz", installDir: "darwin-arm64" },
+  { name: "mac-x64", goos: "darwin", goarch: "amd64", os: "mac", arch: "x64", archive: "tar.gz", installDir: "darwin-x64" },
+  { name: "linux", goos: "linux", goarch: "amd64", os: "linux", arch: "x64", archive: "tar.gz", installDir: "linux-x64" },
+  { name: "linux-arm64", goos: "linux", goarch: "arm64", os: "linux", arch: "arm64", archive: "tar.gz", installDir: "linux-arm64" },
 ];
+
+const SELF_UPDATE_PREFIX = "plugins/infini_cli";
 
 function parseArgs(argv) {
   const opts = {
@@ -573,6 +578,89 @@ async function publish(opts) {
   }
 
   await updateToolManifest(opts);
+  await publishSelfUpdate(opts);
+}
+
+// publishSelfUpdate uploads the raw platform binaries and a manifest used by
+// `agent_infini --update`. Layout (no OSS_PREFIX, served from the bucket root):
+//   plugins/infini_cli/<installDir>/<version>/agent_infini[.exe]
+//   plugins/infini_cli/manifest.json
+async function publishSelfUpdate(opts) {
+  const versionNoV = opts.version.replace(/^v/, "");
+  const entries = [];
+
+  for (const platform of platforms) {
+    if (!platform.installDir) continue;
+    const outputName = platform.goos === "windows" ? `${opts.appName}.exe` : opts.appName;
+    const binaryPath = path.join(opts.releasesDir, platform.name, outputName);
+    let stat;
+    try {
+      stat = await fs.stat(binaryPath);
+    } catch {
+      console.warn(`[self-update] skip ${platform.installDir}: ${binaryPath} not found`);
+      continue;
+    }
+    entries.push({
+      installDir: platform.installDir,
+      file: outputName,
+      binaryPath,
+      size: stat.size,
+      sha256: await sha256File(binaryPath),
+    });
+  }
+
+  if (entries.length === 0) {
+    console.warn("[self-update] no binaries found; skipping manifest publish.");
+    return;
+  }
+
+  const manifest = {
+    version: versionNoV,
+    released_at: new Date().toISOString(),
+    artifacts: {},
+  };
+  for (const entry of entries) {
+    manifest.artifacts[entry.installDir] = {
+      file: entry.file,
+      sha256: entry.sha256,
+      size: entry.size,
+    };
+  }
+  const manifestBody = Buffer.from(JSON.stringify(manifest, null, 2) + "\n");
+
+  console.log(`Publishing self-update manifest: ${SELF_UPDATE_PREFIX}/manifest.json -> v${versionNoV}`);
+  for (const provider of providersFor(opts.provider)) {
+    for (const entry of entries) {
+      const key = `${SELF_UPDATE_PREFIX}/${entry.installDir}/${versionNoV}/${entry.file}`;
+      const data = await fs.readFile(entry.binaryPath);
+      await putRawObject(provider, key, data, "application/octet-stream", opts);
+    }
+    const manifestKey = `${SELF_UPDATE_PREFIX}/manifest.json`;
+    await putRawObject(provider, manifestKey, manifestBody, "application/json", opts);
+    console.log(`[${provider}] ${manifestKey} updated`);
+  }
+}
+
+// putRawObject uploads a single object at an exact key with no extra prefix,
+// so the self-update URLs line up with the install scripts.
+async function putRawObject(provider, key, data, contentType, opts) {
+  if (opts.dryRun) {
+    console.log(`[dry-run] ${provider} put ${key} (${data.length} bytes)`);
+    return;
+  }
+  if (provider === "blob") {
+    const { put } = await import("@vercel/blob");
+    await put(key, data, {
+      access: "public",
+      addRandomSuffix: false,
+      contentType,
+      token: process.env.BLOB_READ_WRITE_TOKEN,
+      allowOverwrite: true,
+    });
+  } else {
+    const client = await createOSSClient();
+    await client.put(key, data, { headers: { "Content-Type": contentType } });
+  }
 }
 
 function providersFor(provider) {
