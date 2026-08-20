@@ -49,18 +49,33 @@ func (ws *workspaceInfo) FullPaths() []string {
 	return paths
 }
 
-func fetchTaskStatus(c *client.Client, taskID string) string {
+type taskMeta struct {
+	Status      string   `json:"status"`
+	DatabaseIDs []string `json:"databaseIds"`
+	RagIDs      []string `json:"ragIds"`
+}
+
+func fetchTaskMeta(c *client.Client, taskID string) (taskMeta, bool) {
 	data, err := c.Get(fmt.Sprintf("/api/ai_task/getTaskInfo/%s", taskID), nil)
-	if err != nil {
-		return ""
+	if err != nil || len(data) == 0 || string(data) == "null" {
+		return taskMeta{DatabaseIDs: []string{}, RagIDs: []string{}}, false
 	}
-	var info struct {
-		Status string `json:"status"`
-	}
+	var info taskMeta
 	if err := json.Unmarshal(data, &info); err != nil {
-		return ""
+		return taskMeta{DatabaseIDs: []string{}, RagIDs: []string{}}, false
 	}
-	return info.Status
+	if info.DatabaseIDs == nil {
+		info.DatabaseIDs = []string{}
+	}
+	if info.RagIDs == nil {
+		info.RagIDs = []string{}
+	}
+	return info, true
+}
+
+func fetchTaskStatus(c *client.Client, taskID string) string {
+	meta, _ := fetchTaskMeta(c, taskID)
+	return meta.Status
 }
 
 func fetchWorkspaceInfo(c *client.Client, taskID string) *workspaceInfo {
@@ -76,32 +91,45 @@ func fetchWorkspaceInfo(c *client.Client, taskID string) *workspaceInfo {
 }
 
 type enrichedResult struct {
-	TaskID    string                 `json:"taskId"`
-	Status    string                 `json:"status,omitempty"`
-	Message   *task.StreamEvent      `json:"lastMessage,omitempty"`
-	Workspace map[string]interface{} `json:"workspace,omitempty"`
+	TaskID      string                 `json:"taskId"`
+	Status      string                 `json:"status,omitempty"`
+	DatabaseIDs []string               `json:"databaseIds"`
+	RagIDs      []string               `json:"ragIds"`
+	Warning     string                 `json:"warning,omitempty"`
+	Message     *task.StreamEvent      `json:"lastMessage,omitempty"`
+	Workspace   map[string]interface{} `json:"workspace,omitempty"`
 }
 
 func enrichStreamResult(result *task.StreamResult) *enrichedResult {
 	res := &enrichedResult{
-		TaskID:  result.TaskID,
-		Message: result.LastMessage,
+		TaskID:      result.TaskID,
+		Message:     result.LastMessage,
+		DatabaseIDs: []string{},
+		RagIDs:      []string{},
 	}
 	c, err := client.New()
 	if err != nil {
 		return res
 	}
 
-	statusCh := make(chan string, 1)
+	metaCh := make(chan taskMeta, 1)
 	wsCh := make(chan *workspaceInfo, 1)
-	go func() { statusCh <- fetchTaskStatus(c, result.TaskID) }()
+	go func() {
+		meta, _ := fetchTaskMeta(c, result.TaskID)
+		metaCh <- meta
+	}()
 	go func() { wsCh <- fetchWorkspaceInfo(c, result.TaskID) }()
 
-	if s := <-statusCh; s != "" {
-		res.Status = s
+	if meta := <-metaCh; meta.Status != "" || len(meta.DatabaseIDs) > 0 || len(meta.RagIDs) > 0 {
+		res.Status = meta.Status
+		res.DatabaseIDs = meta.DatabaseIDs
+		res.RagIDs = meta.RagIDs
 	}
 	if ws := <-wsCh; ws != nil {
 		res.Workspace = map[string]interface{}{"files": ws.FullPaths()}
+	}
+	if len(res.DatabaseIDs) == 0 && len(res.RagIDs) == 0 {
+		res.Warning = "No databases or RAGs were bound to this task. Enable resources first (`db enable` / `rag enable`, then `task context`), or bind them with `task resources <taskId> --db <id>`."
 	}
 	return res
 }
@@ -121,9 +149,19 @@ func printStreamResult(res *enrichedResult) {
 
 		printer := output.NewPrinter(output.FormatTable)
 		printer.PrintTable(
-			[]string{"TaskID", "Status", "Message", "Files"},
-			[][]string{{res.TaskID, res.Status, truncate(messageText, 80), files}},
+			[]string{"TaskID", "Status", "DatabaseIDs", "RagIDs", "Message", "Files"},
+			[][]string{{
+				res.TaskID,
+				res.Status,
+				strings.Join(res.DatabaseIDs, ","),
+				strings.Join(res.RagIDs, ","),
+				truncate(messageText, 80),
+				files,
+			}},
 		)
+		if res.Warning != "" {
+			fmt.Fprintf(os.Stderr, "warning: %s\n", res.Warning)
+		}
 		return
 	}
 	output.PrintResult(res, nil)
@@ -131,11 +169,12 @@ func printStreamResult(res *enrichedResult) {
 
 func fetchEnabledContext(c *client.Client) ([]types.DatabaseItem, []types.RagItem, error) {
 	params := map[string]string{
-		"enabled":  "1",
-		"pageSize": "100",
-		"field":    "updated_at",
-		"order":    "desc",
-		"source":   "all",
+		"enabled":         "1",
+		"pageSize":        "100",
+		"field":           "updated_at",
+		"order":           "desc",
+		"source":          "all",
+		"subscribeSource": "all",
 	}
 
 	dbCh := make(chan chanResult, 1)
@@ -180,8 +219,15 @@ var taskCmd = &cobra.Command{
 	Short: "Create and manage multi-turn AI task conversations",
 	Long: `Create and manage multi-turn AI task conversations.
 
-Before creating a task, verify that the required databases and RAGs are enabled:
+Before creating a task, enable the databases/RAGs the query needs:
+  agent_infini db ls
+  agent_infini db enable <id>
   agent_infini task context
+
+task new cannot take database IDs. The server snapshots currently enabled
+resources into the new task. After creation, inspect databaseIds in the result.
+If it is empty, stop and bind resources before asking SQL questions:
+  agent_infini task resources <taskId> --db <id>
 
 Conversation:
   agent_infini task new "Analyze sales data"
@@ -191,6 +237,7 @@ Manage tasks:
   agent_infini task ls
   agent_infini task ls --search "sales"
   agent_infini task show <taskId>
+  agent_infini task resources <taskId>
   agent_infini task cancel <taskId>
   agent_infini task rm <taskId>
 
@@ -209,6 +256,17 @@ var taskNewCmd = &cobra.Command{
 	Short: "Create a new AI task and stream the response",
 	Long: `Create a new AI task with an initial query. The server processes the request
 and streams the response in real time.
+
+This command does not accept --database-id. The server binds whatever databases
+and RAGs are currently enabled for the user. Enable them first:
+
+  agent_infini db enable <id>
+  agent_infini task context
+  agent_infini task new "Analyze sales data"
+
+The JSON result includes databaseIds and ragIds. If both are empty, the task
+has no data source — enable resources and re-run, or bind with:
+  agent_infini task resources <taskId> --db <id>
 
 Examples:
   agent_infini task new "Analyze sales data"
@@ -758,6 +816,100 @@ Examples:
 }
 
 // ---------------------------------------------------------------------------
+// task resources
+// ---------------------------------------------------------------------------
+
+var taskResourcesCmd = &cobra.Command{
+	Use:   "resources <taskId>",
+	Short: "Show or bind databases and RAGs on an existing task",
+	Long: `Show or update the databases and RAGs bound to a task.
+
+task new snapshots the user's currently enabled resources and ignores any
+database IDs in the create request. Use this command to inspect that snapshot
+or to bind resources after the fact.
+
+With no flags, print the task's current databaseIds and ragIds.
+Passing --db or --rag replaces that side; the other side is left unchanged.
+
+Examples:
+  agent_infini task resources <taskId>
+  agent_infini task resources <taskId> --db <databaseId>
+  agent_infini task resources <taskId> --db id1 --db id2 --rag <ragId>`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		taskID := args[0]
+		dbArgs, _ := cmd.Flags().GetStringSlice("db")
+		ragArgs, _ := cmd.Flags().GetStringSlice("rag")
+		dbChanged := cmd.Flags().Changed("db")
+		ragChanged := cmd.Flags().Changed("rag")
+
+		c, err := client.New()
+		if err != nil {
+			output.PrintResult(nil, err)
+			return nil
+		}
+
+		meta, found := fetchTaskMeta(c, taskID)
+		if !found {
+			output.PrintResult(nil, fmt.Errorf("task not found: %s", taskID))
+			return nil
+		}
+		if !dbChanged && !ragChanged {
+			output.PrintResult(map[string]interface{}{
+				"taskId":      taskID,
+				"databaseIds": meta.DatabaseIDs,
+				"ragIds":      meta.RagIDs,
+				"status":      meta.Status,
+			}, nil)
+			return nil
+		}
+
+		databaseIDs := meta.DatabaseIDs
+		ragIDs := meta.RagIDs
+		if dbChanged {
+			databaseIDs = parseIDArgs(dbArgs)
+		}
+		if ragChanged {
+			ragIDs = parseIDArgs(ragArgs)
+		}
+		if databaseIDs == nil {
+			databaseIDs = []string{}
+		}
+		if ragIDs == nil {
+			ragIDs = []string{}
+		}
+
+		msg := types.WebviewMessage{
+			Type:        "updateTaskResources",
+			TaskID:      taskID,
+			DatabaseIDs: databaseIDs,
+			RagIDs:      ragIDs,
+		}
+		if _, err := c.Post("/api/ai/message", msg); err != nil {
+			output.PrintResult(nil, err)
+			return nil
+		}
+
+		updated, ok := fetchTaskMeta(c, taskID)
+		if !ok {
+			output.PrintResult(nil, fmt.Errorf("task resources updated but task %s could not be reloaded", taskID))
+			return nil
+		}
+		result := map[string]interface{}{
+			"taskId":      taskID,
+			"databaseIds": updated.DatabaseIDs,
+			"ragIds":      updated.RagIDs,
+			"status":      updated.Status,
+		}
+		if !sameIDList(updated.DatabaseIDs, databaseIDs) || !sameIDList(updated.RagIDs, ragIDs) {
+			result["warning"] = "Bind request was accepted, but getTaskInfo does not yet show the new IDs. If the task is still running, the change may only exist in memory until it stops."
+		}
+		output.PrintResult(result, nil)
+		return nil
+	},
+}
+
+// ---------------------------------------------------------------------------
 // init
 // ---------------------------------------------------------------------------
 
@@ -776,6 +928,8 @@ func init() {
 	taskListCmd.Flags().String("search", "", "Filter by task name (substring match)")
 
 	taskDownloadCmd.Flags().StringP("output", "o", ".", "Destination path or directory")
+	taskResourcesCmd.Flags().StringSlice("db", nil, "Database IDs to bind (replaces the task's database list)")
+	taskResourcesCmd.Flags().StringSlice("rag", nil, "RAG IDs to bind (replaces the task's RAG list)")
 
 	taskCmd.AddCommand(taskNewCmd)
 	taskCmd.AddCommand(taskAskCmd)
@@ -787,6 +941,7 @@ func init() {
 	taskCmd.AddCommand(taskFileCmd)
 	taskCmd.AddCommand(taskPreviewCmd)
 	taskCmd.AddCommand(taskDownloadCmd)
+	taskCmd.AddCommand(taskResourcesCmd)
 
 	rootCmd.AddCommand(taskCmd)
 }

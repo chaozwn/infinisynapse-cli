@@ -149,17 +149,23 @@ Binary default location: `~/.infini/bin/agent_infini` (Windows: `%USERPROFILE%\.
 Writes ~/.agent_infini/config.txt (server, api-key, console, prefer-language).
 
 ## Recommended workflow
+These steps are required for any question that needs a database or RAG.
 1. agent_infini init --api-key "your_api_key"
-2. agent_infini db ls / agent_infini rag ls
-3. agent_infini task context  (enable with db enable / rag enable if needed)
-4. agent_infini task new "..."  then  agent_infini task ask <taskId> "..."
-5. agent_infini task ls / show / file / download
+2. agent_infini db ls / agent_infini rag ls  (use the real name, e.g. remote_tmall)
+3. agent_infini db enable <id>  then  agent_infini task context
+   If the target is missing, STOP. Do not call task new.
+4. agent_infini task new "..."  — snapshots currently enabled resources; no --database-id.
+   Inspect JSON data.databaseIds / data.ragIds. If empty and the question needs data, STOP:
+   agent_infini task resources <taskId> --db <id>
+5. agent_infini task ask <taskId> "..."
+6. agent_infini task ls / show / file / download
 
 ## Commands
     init --api-key sk-xxx [--server URL] [--prefer-language zh_CN]
     task new <query> | task ask <taskId> <query>
     task ls [--page N] [--page-size N] [--search Q]
-    task show <taskId> | task context | task cancel <taskId> | task rm <id...>
+    task show <taskId> | task context | task resources <taskId> [--db id] [--rag id]
+    task cancel <taskId> | task rm <id...>
     task file <taskId> | task preview <taskId> <file> | task download <taskId> <file> [-o dir]
     db ls [--type T] [--enabled] [--disabled] | db enable <id...> | db disable <id...>
     rag ls [--keyword K] [--enabled] [--disabled] | rag enable <id...> | rag disable <id...>
@@ -183,6 +189,7 @@ Pipe to jq, e.g.: agent_infini task ls | jq '.items[].task_name'
 - Server unreachable: check --server URL and network
 - Task not found: use task ls
 - No enabled resources: task context, then db enable / rag enable
+- Task databaseIds is empty: enable first, or task resources <taskId> --db <id>. task new has no database id flag.
 
 Run `agent_infini skill` for the full specification.
 '@

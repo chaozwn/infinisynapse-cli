@@ -89,10 +89,11 @@ Quick start:
   1. Initialize:      agent_infini init --api-key <your-key>
   2. List resources:  agent_infini db ls              (list all databases)
                       agent_infini rag ls             (list all RAG knowledge bases)
-  3. Check context:   agent_infini task context       (verify target databases and RAGs are enabled)
-     If needed:       agent_infini db enable <id>     (enable a database)
-                      agent_infini rag enable <id>    (enable a RAG knowledge base)
+  3. Enable + check:  agent_infini db enable <id>
+                      agent_infini task context       (target must appear here)
   4. Create task:     agent_infini task new "Analyze my data"
+                      Inspect databaseIds in the result; if empty, bind with
+                      agent_infini task resources <taskId> --db <id>
   5. Follow up:       agent_infini task ask <taskId> "Show trends"
   6. Browse tasks:    agent_infini task ls
 

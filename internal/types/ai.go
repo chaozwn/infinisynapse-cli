@@ -13,6 +13,8 @@ type WebviewMessage struct {
 	ConnID                    string              `json:"connId,omitempty"`
 	CustomInstructionsSetting string              `json:"customInstructionsSetting,omitempty"`
 	SnapshotTs                int64               `json:"snapshotTs,omitempty"`
+	DatabaseIDs               []string            `json:"databaseIds,omitempty"`
+	RagIDs                    []string            `json:"ragIds,omitempty"`
 }
 
 type APIConfiguration struct {

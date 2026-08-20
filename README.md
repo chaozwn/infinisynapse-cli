@@ -99,15 +99,15 @@ agent_infini init --api-key sk-xxx
 agent_infini db ls            # 列出所有数据库连接
 agent_infini rag ls           # 列出所有 RAG 知识库
 
-# 3. 检查当前启用的上下文
-agent_infini task context     # 查看已启用的数据库和 RAG
+# 3. 启用查询要用的数据源（SQL / 数据分析必做）
+agent_infini db enable <id>
+agent_infini rag enable <id>
+agent_infini task context     # 确认目标已出现在 enabled 列表
 
-# 4. 按需启用资源
-agent_infini db enable <id>   # 启用数据库
-agent_infini rag enable <id>  # 启用 RAG 知识库
-
-# 5. 创建 AI 任务并对话
+# 4. 创建任务。task new 不能传数据库 ID，服务端会快照当前已启用资源
 agent_infini task new "帮我分析用户增长趋势"
+# 检查返回里的 databaseIds；若为空再绑定：
+# agent_infini task resources <taskId> --db <id>
 agent_infini task ask <taskId> "请用柱状图展示"
 
 # 6. 浏览任务列表
@@ -167,9 +167,15 @@ agent_infini init --api-key sk-xxx --console https://api.infinisynapse.cn/api
 ### 任务管理 `agent_infini task`
 
 ```bash
-# 创建新任务（SSE 流式输出）
+# 创建新任务（SSE 流式输出）。不能传 --database-id，服务端快照当前已启用资源。
+# 返回 JSON 含 databaseIds / ragIds；若为空且问题需要查库，用 task resources 绑定。
 agent_infini task new "帮我分析用户增长趋势"
 agent_infini task new --query "检查库存水平"
+
+# 查看或绑定任务级数据源 / RAG
+agent_infini task resources <taskId>
+agent_infini task resources <taskId> --db <databaseId>
+agent_infini task resources <taskId> --db id1 --rag <ragId>
 
 # 在已有任务中继续对话
 agent_infini task ask <taskId> "请用柱状图展示"

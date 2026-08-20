@@ -26,20 +26,25 @@ Step 1 — First-time setup (run once):
     prefer-language: "zh_CN"
   EOF
 
-Step 2 — List available resources:
+Step 2 — List available resources (use the real name/id, e.g. remote_tmall not t_mall):
   agent_infini db ls                             # List all databases
   agent_infini rag ls                            # List all RAG knowledge bases
 
-Step 3 — Check context (verify enabled resources before creating a task):
-  agent_infini task context                      # Show enabled databases and RAGs
-  If target resources are not enabled, enable them first:
+Step 3 — Enable the resources this query needs. This is required, not optional:
   agent_infini db enable <id>                    # Enable a database
   agent_infini rag enable <id>                   # Enable a RAG knowledge base
+  agent_infini task context                      # Confirm the target appears in the enabled list
+  If it is missing, STOP. Do not call task new.
 
-Step 4 — Multi-turn task conversation:
-  agent_infini task new "Analyze my data"        # Create a task
-  agent_infini task ask <taskId> "Show trends"   # Continue the conversation
-  agent_infini task ask <taskId> "Export report"  # Follow up
+Step 4 — Create the task, then verify it inherited those resources:
+  agent_infini task new "Analyze my data"
+  The JSON result includes databaseIds and ragIds. task new cannot take --database-id;
+  the server snapshots currently enabled resources.
+  If databaseIds is [] and the question needs a database, STOP.
+  Bind afterwards with:
+  agent_infini task resources <taskId> --db <id>
+  Then continue:
+  agent_infini task ask <taskId> "Show trends"
 
 Step 5 — Manage tasks and workspace files:
   agent_infini task ls                           # List tasks (paginated)
@@ -65,6 +70,8 @@ Available Commands
   task rm <taskId> [taskId2...]                    Delete one or more tasks
   task cancel <taskId>                             Cancel a running task
   task context                                     Show enabled databases and RAGs
+  task resources <taskId>                          Show databases/RAGs bound to a task
+  task resources <taskId> --db <id> [--rag <id>]   Bind databases/RAGs onto an existing task
   task file <taskId>                               List workspace files
   task preview <taskId> <fileName>                 Preview workspace file to stdout
   task download <taskId> <fileName> [-o dir]       Download workspace file to local disk
@@ -113,13 +120,15 @@ Common Scenarios
    agent_infini db ls
    agent_infini rag ls --enabled
 
-2. Enable a database before starting analysis:
+2. Enable a database before starting analysis (required for SQL / data questions):
    agent_infini db ls
    agent_infini db enable <id>
    agent_infini task context
 
-3. Start a new analysis task:
+3. Start a new analysis task, then confirm databaseIds is not empty:
    agent_infini task new "What tables are in my database?"
+   If databaseIds is [], bind explicitly:
+   agent_infini task resources <taskId> --db <id>
 
 4. Multi-turn analysis:
    agent_infini task new "Analyze the users table schema"
@@ -160,6 +169,8 @@ Error Handling
   - Server unreachable:   Check --server URL and network connectivity
   - Task not found:       Use 'task ls' to find valid task IDs
   - No enabled resources: Use 'task context' to check, then 'db enable' or 'rag enable'
+  - Task has empty databaseIds: The query will not see any database. Enable first, or run
+    'task resources <taskId> --db <id>'. task new does not accept a database id flag.
 
 ================================================================================
 Configuration & Credential Chain

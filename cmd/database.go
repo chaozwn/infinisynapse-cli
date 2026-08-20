@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -198,7 +199,7 @@ func setDatabaseEnabled(ids []string, enabled int) error {
 }
 
 func parseIDArgs(args []string) []string {
-	var ids []string
+	ids := []string{}
 	for _, arg := range args {
 		for _, id := range strings.Split(arg, ",") {
 			id = strings.TrimSpace(id)
@@ -208,6 +209,22 @@ func parseIDArgs(args []string) []string {
 		}
 	}
 	return ids
+}
+
+func sameIDList(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	as := append([]string{}, a...)
+	bs := append([]string{}, b...)
+	sort.Strings(as)
+	sort.Strings(bs)
+	for i := range as {
+		if as[i] != bs[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func truncate(s string, maxRunes int) string {

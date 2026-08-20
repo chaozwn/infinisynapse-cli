@@ -37,11 +37,14 @@ Credentials are loaded from the first file found in this order:
 
 ## Recommended workflow
 
+These steps are required for any question that needs a database or RAG. Skipping enable is why SQL tasks fail.
+
 1. Initialize: `agent_infini init --api-key "your_api_key"`
-2. List resources: `agent_infini db ls` / `agent_infini rag ls`
-3. Check context: `agent_infini task context`; if needed enable with `db enable` / `rag enable`
-4. Multi-turn chat: `agent_infini task new "..."`, then `agent_infini task ask <taskId> "..."`
-5. Manage tasks and files: `task ls` / `task show` / `task file` / `task download`
+2. List resources: `agent_infini db ls` / `agent_infini rag ls` (use the real name, e.g. `remote_tmall`)
+3. Enable + verify: `agent_infini db enable <id>` then `agent_infini task context`
+4. Create a task: `agent_infini task new "..."` — this snapshots currently enabled resources. It does **not** accept `--database-id`.
+5. Inspect the JSON `databaseIds` / `ragIds`. If they are empty and the question needs data, STOP and run `agent_infini task resources <taskId> --db <id>`.
+6. Continue: `agent_infini task ask <taskId> "..."`
 
 ## Command reference
 
@@ -60,6 +63,8 @@ agent_infini task ask <taskId> "Show it as a bar chart"  # continue the conversa
 agent_infini task ls [--page N] [--page-size N] [--search Q]
 agent_infini task show <taskId>                       # task details
 agent_infini task context                             # show enabled DBs and RAGs (alias: ctx)
+agent_infini task resources <taskId>                  # show databases/RAGs bound to a task
+agent_infini task resources <taskId> --db <id>        # bind databases onto an existing task
 agent_infini task cancel <taskId>                     # cancel a running task
 agent_infini task rm <id1> [id2 ...]                  # delete tasks (batch: space/comma separated)
 agent_infini task file <taskId>                       # list workspace files
@@ -130,6 +135,7 @@ agent_infini task ls | jq '.items[].task_name'
 - Server unreachable: check the `--server` URL and network
 - Task not found: use `task ls` to find a valid taskId
 - No enabled resources: use `task context`, then `db enable` / `rag enable`
+- Task `databaseIds` is empty: the task cannot query any database. Enable first, or `task resources <taskId> --db <id>`. `task new` does not accept a database id flag.
 
 ## Common scenarios
 
@@ -139,6 +145,8 @@ agent_infini db ls
 agent_infini db enable <id>
 agent_infini task context
 agent_infini task new "What tables are in my database?"
+# Confirm the result includes databaseIds. If empty:
+agent_infini task resources <taskId> --db <id>
 
 # Multi-turn analysis
 agent_infini task new "Analyze the users table schema"
